@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#ffffff">
+<title>클로드노트</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="클로드노트">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+  :root{
+    --bg:#eef1f7; --card:#ffffff; --line:#e6e9f0; --line2:#eef0f5;
+    --txt:#1c2230; --muted:#7b8294; --soft:#9aa2b1;
+    --accent:#2f6bff; --accent-soft:#eaf1ff; --teal:#0bb39a; --teal-soft:#e3f7f2;
+    --warn:#f59e0b; --add:#0bb39a; --del:#ef5b6b; --chip:#f1f3f8;
+    --shadow:0 2px 10px rgba(28,40,75,.06);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',-apple-system,system-ui,sans-serif;
+    background:var(--bg);color:var(--txt);font-size:15px;line-height:1.62;
+    -webkit-font-smoothing:antialiased}
+  .app{max-width:520px;margin:0 auto;min-height:100vh;background:var(--bg);
+    padding-bottom:84px;position:relative}
+  header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);padding:13px 18px;display:flex;align-items:center;gap:9px}
+  header .mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#2f6bff,#0bb39a);
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:15px}
+  header .ttl{font-weight:800;font-size:17px;letter-spacing:-.4px}
+  header .ttl small{display:block;font-weight:500;font-size:11px;color:var(--muted);letter-spacing:0}
+  .scr{padding:16px 16px 24px;display:none}
+  .scr.on{display:block;animation:fade .25s}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px;
+    box-shadow:var(--shadow)}
+  .card h2{margin:0 0 3px;font-size:16px;letter-spacing:-.3px}
+  .card .sub{color:var(--muted);font-size:12.5px;margin-bottom:12px;line-height:1.5}
+  .lead{font-size:13px;color:var(--muted)}
+  textarea{width:100%;min-height:150px;background:#fbfcfe;color:var(--txt);border:1.5px solid var(--line);
+    border-radius:12px;padding:13px;font-size:15px;line-height:1.7;resize:vertical;font-family:inherit}
+  textarea:focus{outline:none;border-color:var(--accent)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:48px;
+    padding:0 18px;border-radius:12px;border:1.5px solid var(--line);background:#fff;color:var(--txt);
+    cursor:pointer;font-size:15px;font-weight:600;font-family:inherit;width:100%;transition:.15s}
+  .btn:active{transform:scale(.98)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(47,107,255,.28)}
+  .btn.teal{background:var(--teal);border-color:var(--teal);color:#fff}
+  .btn.soft{background:var(--accent-soft);border-color:var(--accent-soft);color:var(--accent)}
+  .btn.ghost{background:#fff;color:var(--muted)}
+  .btn.sm{min-height:38px;font-size:13px;width:auto;padding:0 13px;border-radius:10px}
+  .grid{display:flex;gap:9px;flex-wrap:wrap}
+  .grid .btn{flex:1;min-width:0}
+  .stack>*{margin-bottom:10px}
+  .stack>*:last-child{margin-bottom:0}
+  .hint{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.55;
+    background:#f7f9fc;border:1px solid var(--line2);border-radius:10px;padding:10px 12px}
+  .hint b{color:var(--txt)}
+  .steps{display:flex;gap:6px;margin-bottom:14px}
+  .steps .s{flex:1;height:5px;border-radius:3px;background:#dfe4ee}
+  .steps .s.done{background:var(--accent)}
+  .reclist{display:flex;flex-direction:column;gap:9px;margin-top:13px}
+  .rec{display:flex;align-items:center;gap:11px;background:#fbfcfe;border:1.5px solid var(--line);
+    border-radius:13px;padding:11px 13px;cursor:pointer}
+  .rec.playing{border-color:var(--teal);background:var(--teal-soft)}
+  .rec .ic{width:38px;height:38px;flex:0 0 auto;border-radius:10px;background:var(--accent-soft);
+    display:flex;align-items:center;justify-content:center;font-size:18px}
+  .rec .m{flex:1;min-width:0}
+  .rec .nm{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rec .su{font-size:11.5px;color:var(--muted);margin-top:1px}
+  .rec .su .new{color:var(--teal);font-weight:800}
+  .rec .go{flex:0 0 auto;width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;
+    border:none;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .empty{text-align:center;color:var(--soft);font-size:13px;padding:22px 10px;border:1.5px dashed var(--line);
+    border-radius:13px;margin-top:13px}
+  audio{width:100%;margin-top:10px}
+  .spk{display:flex;align-items:center;gap:10px;padding:11px;border:1.5px solid var(--line);
+    border-radius:13px;margin-bottom:10px;background:#fbfcfe}
+  .swatch{width:34px;height:34px;border-radius:50%;flex:0 0 auto;border:2px solid #fff;box-shadow:0 0 0 1px var(--line)}
+  .spk .fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+  .spk input{border:1.5px solid var(--line);border-radius:9px;padding:9px 11px;font-size:14px;font-family:inherit;width:100%}
+  .spk input:focus{outline:none;border-color:var(--accent)}
+  .spk .lab{font-size:11px;color:var(--soft)}
+  .palette{display:flex;gap:5px;flex-wrap:wrap;margin-top:3px}
+  .pdot{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px var(--line)}
+  .pdot.sel{box-shadow:0 0 0 2px var(--accent)}
+  .turn{margin-bottom:14px}
+  .turn .head{display:flex;align-items:center;gap:7px;margin-bottom:3px;flex-wrap:wrap}
+  .turn .who{font-weight:800;font-size:13.5px}
+  .turn .ts{font-size:11px;color:var(--soft)}
+  .turn .ts.seek{cursor:pointer;text-decoration:underline;color:var(--accent)}
+  .turn select{margin-left:auto;border:1px solid var(--line);border-radius:8px;padding:4px 6px;font-size:11.5px;
+    background:#fff;color:var(--muted);font-family:inherit}
+  .turn .body{font-size:14.5px;background:#fbfcfe;border:1px solid var(--line2);border-radius:11px;padding:10px 12px}
+  ins{background:rgba(11,179,154,.16);color:#067a68;text-decoration:none;border-radius:3px;padding:0 2px}
+  del{background:rgba(239,91,107,.14);color:#c0344a;border-radius:3px;padding:0 2px}
+  .rep h3{font-size:14px;margin:16px 0 7px;color:var(--accent);display:flex;align-items:center;gap:6px}
+  .rep ul{margin:6px 0;padding-left:19px}.rep li{margin:5px 0}
+  .rep .docttl{font-size:18px;font-weight:800;margin:2px 0 4px}
+  .meta{font-size:12.5px;color:var(--muted);margin-bottom:8px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+  .chip{background:var(--chip);border-radius:20px;padding:4px 11px;font-size:12px;color:var(--muted)}
+  .todo{display:flex;gap:10px;align-items:flex-start;padding:11px;border:1.5px solid var(--line);
+    border-radius:12px;margin-bottom:9px;background:#fbfcfe}
+  .todo input{width:21px;height:21px;flex:0 0 auto;margin-top:1px;accent-color:var(--teal)}
+  .todo .t{flex:1;font-size:14px}
+  .todo .tags{margin-top:4px;display:flex;gap:6px;flex-wrap:wrap}
+  .tag{font-size:11px;padding:2px 8px;border-radius:7px;background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .tag.due{background:#fff3e0;color:#c77700}
+  .stat{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 2px}
+  .stat .b{flex:1;min-width:70px;background:#fbfcfe;border:1px solid var(--line);border-radius:11px;padding:9px;text-align:center}
+  .stat .b b{display:block;font-size:18px}.stat .b span{font-size:10.5px;color:var(--muted)}
+  .opts{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+  .opts label{display:flex;align-items:center;gap:9px;font-size:14px;background:#fbfcfe;border:1px solid var(--line);
+    border-radius:11px;padding:11px 13px}
+  .opts input{width:19px;height:19px;accent-color:var(--accent)}
+  .seg{display:flex;background:#eef1f7;border-radius:11px;padding:3px;margin-bottom:12px}
+  .seg button{flex:1;border:none;background:transparent;padding:9px;border-radius:8px;font-size:13.5px;
+    font-weight:700;color:var(--muted);font-family:inherit}
+  .seg button.on{background:#fff;color:var(--accent);box-shadow:var(--shadow)}
+  details{border:1px solid var(--line);border-radius:12px;padding:0;margin-top:10px;overflow:hidden}
+  summary{cursor:pointer;font-weight:700;font-size:13.5px;padding:12px 14px;background:#fbfcfe}
+  details .dc{padding:12px 14px}
+  .dictrow{display:flex;gap:7px;margin-bottom:7px;align-items:center}
+  .dictrow input{flex:1;border:1.5px solid var(--line);border-radius:9px;padding:9px;font-size:13.5px;min-width:0;font-family:inherit}
+  .dictrow .x{flex:0 0 auto;width:36px;height:36px;border-radius:9px;border:1px solid var(--line);background:#fff;color:var(--del)}
+  code{background:var(--chip);padding:1px 6px;border-radius:5px;font-size:13px}
+  nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;z-index:30;
+    background:rgba(255,255,255,.96);backdrop-filter:blur(10px);border-top:1px solid var(--line);
+    display:flex;padding:7px 6px 10px}
+  nav button{flex:1;border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;
+    padding:5px 0;color:var(--soft);font-size:10.5px;font-weight:600;font-family:inherit;cursor:pointer}
+  nav button .ni{font-size:21px;line-height:1}
+  nav button.on{color:var(--accent)}
+  .toast{position:fixed;bottom:96px;left:50%;transform:translateX(-50%);background:#1c2230;color:#fff;
+    padding:11px 18px;border-radius:12px;font-size:13.5px;font-weight:600;opacity:0;transition:.2s;
+    pointer-events:none;z-index:50;max-width:90%;text-align:center}
+  .toast.show{opacity:.96}
+  .banner{background:linear-gradient(135deg,#eaf1ff,#e3f7f2);border:1px solid #d8e4fb;border-radius:14px;
+    padding:13px 15px;margin-bottom:14px;font-size:13px}
+  .banner b{color:var(--accent)}
+  .recdot{width:9px;height:9px;border-radius:50%;background:var(--del);display:inline-block;animation:bl 1s infinite}
+  @keyframes bl{50%{opacity:.3}}
+  .hidden{display:none!important}
+  @media print{nav,header,.seg,.turn select{display:none!important}.app{padding:0;max-width:100%}.card{box-shadow:none;border:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="mark">CN</div>
+    <div class="ttl">클로드노트<small>회의 전사 교정 · 보고서 자동 생성</small></div>
+  </header>
+
+  <section class="scr on" id="s-start">
+    <div class="steps"><div class="s done"></div><div class="s" id="st2"></div><div class="s" id="st3"></div></div>
+
+    <div class="card" id="storeCard">
+      <h2>🗂️ 최근 회의</h2>
+      <div class="sub">보고서를 만들면 자동 저장돼요. 눌러서 다시 열고, ✕로 삭제합니다.</div>
+      <div id="storeList"></div>
+    </div>
+
+    <div class="card">
+      <h2>🎙️ 내 음성 파일</h2>
+      <div class="sub">휴대폰 녹음을 불러오면 <b>최신 녹음순</b>으로 보여줘요. 항목을 누르면 바로 재생됩니다.</div>
+      <div class="stack">
+        <label class="btn primary" style="cursor:pointer">📁 음성 파일 불러오기
+          <input type="file" id="audioFile" accept="audio/*" multiple class="hidden"></label>
+        <button class="btn soft" id="btnFolder">🗂️ 폴더에서 한번에 불러오기</button>
+      </div>
+      <button class="btn ghost sm hidden" id="btnSort" style="margin-top:10px">정렬: 최근순 ▾</button>
+      <div id="recList" class="reclist"></div>
+      <div id="audioBox" class="hidden">
+        <div id="nowPlaying" class="lead" style="margin:10px 0 0"></div>
+        <audio id="player" controls></audio>
+      </div>
+      <div class="hint">💡 <b>휴대폰에서 이 앱을 열면</b> 파일 선택 시 휴대폰 녹음 목록이 그대로 떠요. 보안상 웹은 저장소에 직접 접근하지 못해, 불러오기/폴더 방식으로 가져옵니다.</div>
+    </div>
+
+    <div class="card">
+      <h2>📝 전사 입력</h2>
+      <div class="sub">PLAUD 전사를 붙여넣거나, 마이크로 바로 받아쓰세요. 입력하면 <b>회의록·전체 전사·할 일</b>이 자동으로 만들어집니다.</div>
+      <textarea id="raw" placeholder="여기에 회의 전사를 붙여넣기…&#10;예) 화자1 [00:00:01]  안녕하세요 오늘 회의는…"></textarea>
+      <div class="grid" style="margin-top:11px">
+        <button class="btn ghost sm" id="btnRec"><span id="recState">● 실시간 녹음</span></button>
+        <button class="btn ghost sm" id="btnSample">샘플 체험</button>
+        <button class="btn ghost sm" id="btnClear">비우기</button>
+      </div>
+      <button class="btn teal" id="btnGo" style="margin-top:11px">✨ 보고서 자동 생성</button>
+      <div class="hint">실시간 녹음은 Chrome/Edge(휴대폰 포함)에서 한국어로 받아 적습니다. 불러온 음성은 재생·정리용이며, 자동 전사가 필요하면 음성 파일을 Claude에게 보내면 됩니다.</div>
+    </div>
+  </section>
+
+  <section class="scr" id="s-speaker">
+    <div class="card">
+      <h2>🗣️ 발화자 설정</h2>
+      <div class="sub">전사에서 감지된 화자입니다. <b>이름·역할·색</b>을 정하면 모든 보고서에 반영돼요. (목소리 자동 식별이 아니라, 화자에 이름을 지정하는 방식입니다.)</div>
+      <div id="spkList"></div>
+      <div class="empty hidden" id="spkEmpty">먼저 ‘시작’ 탭에서 전사를 입력하고 <b>보고서 자동 생성</b>을 눌러주세요.</div>
+      <div class="hint" id="spkHint">전체 전사에서 발언마다 화자를 바꿀 수도 있어요(보고서 탭 → 전체 전사). PLAUD가 한 사람을 둘로 나눴다면, 같은 이름·색을 지정하면 합쳐 보입니다.</div>
+    </div>
+  </section>
+
+  <section class="scr" id="s-report">
+    <div class="banner" id="repBanner">전사를 입력하면 세 가지 보고서가 자동 생성됩니다.</div>
+    <div class="card">
+      <div class="grid">
+        <button class="btn primary sm" id="shareAll">📤 팀 공유용 전체 복사</button>
+        <button class="btn soft sm" id="dlAll">⬇️ 전체 .md</button>
+      </div>
+      <div class="grid" style="margin-top:8px">
+        <button class="btn ghost sm" id="cpReport">📋 회의록</button>
+        <button class="btn ghost sm" id="cpTrans">🧾 전사</button>
+        <button class="btn ghost sm" id="cpTodo">✅ 할 일</button>
+        <button class="btn ghost sm" id="btnPrint">🖨️ 인쇄</button>
+      </div>
+    </div>
+
+    <div class="seg" id="repSeg">
+      <button class="on" data-r="report">📋 회의록</button>
+      <button data-r="trans">🧾 전체 전사</button>
+      <button data-r="todo">✅ 할 일</button>
+    </div>
+
+    <div class="card rep" id="rep-report"><div class="empty">보고서 대기 중</div></div>
+    <div class="card rep hidden" id="rep-trans"><div class="empty">전사 대기 중</div></div>
+    <div class="card rep hidden" id="rep-todo"><div class="empty">할 일 대기 중</div></div>
+  </section>
+
+  <section class="scr" id="s-more">
+    <div class="card">
+      <h2>⚙️ 교정 옵션</h2>
+      <div class="sub">전사를 다듬는 규칙입니다. 바꾸면 즉시 다시 적용돼요.</div>
+      <div class="opts">
+        <label><input type="checkbox" id="optFiller" checked> 군말 제거 (어/음/네네네/뭐…)</label>
+        <label><input type="checkbox" id="optSpace" checked> 띄어쓰기·공백 정리</label>
+        <label><input type="checkbox" id="optDict" checked> 오인식 사전 교정</label>
+        <label><input type="checkbox" id="optPunc" checked> 문장 분리·마침표</label>
+        <label><input type="checkbox" id="optProfan"> 비속어 순화</label>
+      </div>
+      <div class="stat" id="cleanStats"></div>
+      <details><summary>원문 ↔ 교정본 대조 보기</summary><div class="dc" id="diffBox"><div class="lead">생성 후 표시됩니다.</div></div></details>
+    </div>
+
+    <div class="card">
+      <h2>📒 오인식 사전</h2>
+      <div class="sub">자주 틀리는 단어를 등록하세요. 회의 고유명사(이름·지역·기관)를 넣으면 정확도가 크게 올라갑니다.</div>
+      <div id="dictList"></div>
+      <button class="btn ghost sm" id="addDict" style="margin-top:6px">+ 항목 추가</button>
+    </div>
+
+    <div class="card">
+      <h2>🔇 군말 목록</h2>
+      <div class="sub">제거할 군말(쉼표로 구분). 의미 있는 단어는 빼세요.</div>
+      <textarea id="fillerList" style="min-height:70px"></textarea>
+    </div>
+
+    <div class="card">
+      <h2>🤖 Claude 정밀모드</h2>
+      <div class="sub">규칙 교정의 한계를 넘는 문맥 교정·요약이 필요할 때, 프롬프트를 복사해 Claude에 전사와 함께 주세요.</div>
+      <div class="stack">
+        <button class="btn teal" id="cpPrompt">교정 프롬프트 + 전사 복사</button>
+        <button class="btn soft" id="cpPromptMin">회의록 프롬프트 복사</button>
+      </div>
+    </div>
+  </section>
+
+  <nav>
+    <button class="on" data-go="start"><span class="ni">🏠</span>시작</button>
+    <button data-go="speaker"><span class="ni">🗣️</span>발화자</button>
+    <button data-go="report"><span class="ni">📋</span>보고서</button>
+    <button data-go="more"><span class="ni">⚙️</span>설정</button>
+  </nav>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const SAMPLE=`박혜민 대표님 [00:00:01]
+그리고 저는 제발 부탁드리는데 지금 그 본질적으로 거기에 박물관 짓고 뭐 짓고 다 좋아요 근데 저는 사실은 우리나라 박물관이 너무 많고 미술관 너무 많고 인구 비로는 적습니다 아 근데 저는 인프라 구축에 돈 쓰는 반대는 똑같습니다 네네네 근데 너무 안가거든요 사람들이 그래서 지금 카이스트도 미술관이 있어요 카이스트네 지금 개빡쳐요 진짜 카이스트네에 300억 들여가지고 미술관 지어놨어요 총장이 몇 명 가는 줄 알아요? 학생들 아무도 안 가고 관광객 못 들어가거든요 왜 못 들어가는 줄 알아요?
+
+박혜민 대표님 [00:00:33]
+출입 제한되어 있어요 아니 학생증 돼야 들어갈 수 있어도 카이스트만? 어 카이스트 미술관만 왜냐면 거기 다 출입통제거든 모든 학교가 거기 학생증 없으면 못 들어가거든요 그런 데를 만들어 놓고 미술관이라고 벌써 해놨어요 저는 그 대한민국에서 지금 말씀하신 아이디어는 되게 좋은데 지금 그 박물관 찍거나 미술관 찍더라도 현영감 있어야 돼요
+
+김민수 위원 [00:01:05]
+네 그러니까 제 말씀은 예산 우선순위를 좀 다시 봐야 된다는 거예요 일단 다음 주까지 제가 지역 개발 실효성 자료를 정리해서 보내드릴게요 그리고 선거 관리 사태 관련해서는 이 부장님이 확인해 주시기로 했습니다`;
+
+let DICT=[['비로는','비율로는'],['현영감','현장감'],['되요','돼요'],['안되','안 돼'],['몇일','며칠'],['어떻해','어떻게'],['카이스트네에','KAIST에'],['카이스트네','KAIST'],['카이스트','KAIST']];
+let FILLERS=['어','음','그','인제','이제','막','뭐','좀','그냥','아','자','응','네네네','네네','어어','음음','그그','저기','이렇게','약간'];
+const PROFAN=[['개빡쳐','매우 화가 나'],['빡쳐','화가 나'],['존나','매우'],['씨발',''],['새끼','']];
+const PALETTE=['#2f6bff','#0bb39a','#d946ef','#f59e0b','#ef5b6b','#10b981','#6366f1','#ec4899'];
+
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._);t._=setTimeout(()=>t.classList.remove('show'),1700);}
+function esc(s){return(s==null?'':''+s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function download(name,text){const b=new Blob([text],{type:'text/plain;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();}
+async function copy(t){try{await navigator.clipboard.writeText(t);toast('복사했습니다');}catch(e){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('복사했습니다');}}
+
+function parseTranscript(raw){
+  const lines=raw.split(/\r?\n/),blocks=[];let cur=null;
+  const head=/^\s*(?:\[?(\d{1,2}:\d{2}(?::\d{2})?)\]?\s*)?([^\[\]:\n]{1,24}?)\s*(?:\[(\d{1,2}:\d{2}(?::\d{2})?)\])?\s*:?\s*$/;
+  for(const ln of lines){const t=ln.trim();if(!t)continue;
+    const m=t.match(head);
+    const looksHead=m&&(m[1]||m[3])&&m[2]&&m[2].length<=18&&!/[.?!]$/.test(m[2]);
+    if(looksHead){cur={speaker:m[2].trim(),ts:(m[1]||m[3]||''),text:''};blocks.push(cur);}
+    else{if(!cur){cur={speaker:'',ts:'',text:''};blocks.push(cur);}cur.text+=(cur.text?' ':'')+t;}}
+  if(!blocks.length)blocks.push({speaker:'',ts:'',text:raw.trim()});
+  return blocks.filter(b=>b.text.trim());
+}
+
+function cleanText(text,opt,counters){
+  let s=' '+text+' ';
+  if(opt.dict)for(const[a,b]of DICT){if(!a)continue;const re=new RegExp(a.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g');const bf=s;s=s.replace(re,b);if(bf!==s)counters.dict++;}
+  if(opt.profan)for(const[a,b]of PROFAN){const re=new RegExp(a,'g');const bf=s;s=s.replace(re,b);if(bf!==s)counters.profan++;}
+  if(opt.filler){FILLERS.sort((a,b)=>b.length-a.length);for(const f of FILLERS){const re=new RegExp('(?:(?<=\\s)|^)'+f.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?=\\s)','g');const bf=s;s=s.replace(re,' ');if(bf!==s)counters.filler++;}}
+  if(opt.space)s=s.replace(/\s{2,}/g,' ').replace(/\s+([,.?!])/g,'$1').trim();
+  if(opt.punc)s=segment(s);else s=s.trim();
+  return s.trim();
+}
+function segment(s){
+  s=s.trim();
+  const enders=['습니다','습니까','됩니다','입니다','거든요','잖아요','네요','군요','세요','지요','어요','아요','해요','예요','에요','데요','까요','을까요','드려요','드릴게요','보낼게요','했습니다','됐어요','같아요','돼요','겠어요','겠습니다'];
+  const qenders=['까요','을까요','ㄴ가요','은가요','는가요'];
+  let out=s;enders.sort((a,b)=>b.length-a.length);
+  for(const e of enders){const re=new RegExp('('+e+')\\s+(?=[가-힣])','g');out=out.replace(re,(m,g1)=>g1+(qenders.includes(g1)?'? ':'. '));}
+  out=out.replace(/(을까요|ㄴ가요|은가요|는가요|까요)(?=[.\s]|$)/g,(m,g1)=>g1+'?');
+  out=out.replace(/\?\.?/g,'?').replace(/\.\s*\./g,'.').trim();
+  if(out&&!/[.?!]$/.test(out))out+='.';
+  return out.replace(/\s{2,}/g,' ');
+}
+function diffWords(a,b){
+  const A=a.split(/(\s+)/),B=b.split(/(\s+)/),n=A.length,m=B.length;
+  const dp=Array.from({length:n+1},()=>new Int32Array(m+1));
+  for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)dp[i][j]=A[i]===B[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);
+  let i=0,j=0,h='';
+  while(i<n&&j<m){if(A[i]===B[j]){h+=esc(A[i]);i++;j++;}else if(dp[i+1][j]>=dp[i][j+1]){if(A[i].trim())h+='<del>'+esc(A[i])+'</del>';i++;}else{if(B[j].trim())h+='<ins>'+esc(B[j])+'</ins>';else h+=B[j];j++;}}
+  while(i<n){if(A[i].trim())h+='<del>'+esc(A[i])+'</del>';i++;}
+  while(j<m){if(B[j].trim())h+='<ins>'+esc(B[j])+'</ins>';else h+=B[j];j++;}
+  return h;
+}
+
+const STOP=new Set(['그리고','저는','지금','그게','근데','그래서','정말','진짜','우리','너무','많고','있어요','없어요','거예요','거든요','대표님','위원','부장님','그런','이런','저런','해서','하는','하고','되는','같아요','거기','여기','그거','이거','대한','관련','대해','대한민국','말씀','이렇게','그러니까','그냥','다시','좀','다','뭐','왜','네','것','수','등','및','더','또','이','그','저']);
+function tokens(t){return t.replace(/[^가-힣a-zA-Z0-9\s]/g,' ').split(/\s+/).map(w=>w.replace(/(은|는|이|가|을|를|에|의|도|만|로|으로|에서|에게|까지|부터|와|과|이라고|라고|하고|에는)$/,'')).filter(w=>w.length>=2&&!STOP.has(w));}
+function keywords(t,n=12){const f={};for(const w of tokens(t))f[w]=(f[w]||0)+1;return Object.entries(f).sort((a,b)=>b[1]-a[1]).slice(0,n);}
+function sentences(t){return t.split(/(?<=[.?!])\s+|\n+/).map(s=>s.trim()).filter(s=>s.length>4);}
+function summarize(t,kw,n=5){const sc={},ss=sentences(t),ks=Object.fromEntries(kw);ss.forEach((s,i)=>{let v=0;for(const w of tokens(s))v+=(ks[w]||0);sc[i]=v/Math.sqrt(tokens(s).length+1);});return Object.entries(sc).sort((a,b)=>b[1]-a[1]).slice(0,n).map(e=>+e[0]).sort((a,b)=>a-b).map(i=>ss[i]);}
+function extract(text){
+  const ss=sentences(text),res={decisions:[],actions:[],questions:[]};
+  const decRe=/(결정|하기로 했|합의|확정|추진하기로|진행하기로|채택)/;
+  const actRe=/(하기로 했|주시기로|보내드릴게요|보낼게요|드릴게요|정리해서|정리해|준비하|준비할|챙기|확인해|확인하기로|작성|검토하기로|맡기로|맡아|처리하기로)/;
+  const dueRe=/(다음\s?주|이번\s?주|내일|모레|오늘|월요일|화요일|수요일|목요일|금요일|\d{1,2}월\s?\d{1,2}일|\d{1,2}일까지|말까지|초까지|까지)/;
+  const SKIP=new Set(['그리고','근데','그래서','그러니까','일단','네','아니','저는','제가','우리','지금']);
+  for(const s of ss){
+    if(decRe.test(s))res.decisions.push(s);
+    if(actRe.test(s)){const due=(s.match(dueRe)||[''])[0];let owner='';
+      const titled=s.match(/([가-힣]{2,4})(님|위원|부장|대표|팀장|이사|과장|선임)/);
+      if(titled)owner=titled[1]+titled[2];
+      else{const all=[...s.matchAll(/([가-힣]{2,4})(?:이|가|께서|은|는)\s/g)];for(const mm of all){if(!SKIP.has(mm[1])){owner=mm[1];break;}}}
+      res.actions.push({text:s,due,owner});}
+    if(/[?]$/.test(s)||/(까요|나요|을까요|는가요)\??$/.test(s))res.questions.push(s);
+  }
+  res.decisions=[...new Set(res.decisions)].slice(0,8);
+  res.questions=[...new Set(res.questions)].slice(0,8);
+  return res;
+}
+
+let STATE={blocks:[],cleanBlocks:[],title:'회의록',date:''};
+let SPK={};
+let tSearchTerm='';
+function getOpts(){return{filler:$('#optFiller').checked,space:$('#optSpace').checked,dict:$('#optDict').checked,punc:$('#optPunc').checked,profan:$('#optProfan').checked};}
+function dispName(label){const s=SPK[label];return(s&&s.name)?s.name:(label||'화자');}
+function dispColor(label){const s=SPK[label];return(s&&s.color)||'#7b8294';}
+
+function process(){
+  const raw=$('#raw').value.trim();
+  if(!raw){toast('전사를 입력하세요');return false;}
+  syncSettings();
+  const blocks=parseTranscript(raw);
+  const labels=[...new Set(blocks.map(b=>b.speaker))];
+  let ci=Object.keys(SPK).length;
+  labels.forEach(l=>{if(!SPK[l]){SPK[l]={name:l||('화자 '+(ci+1)),role:'',color:PALETTE[ci%PALETTE.length]};ci++;}});
+  const opt=getOpts(),c={filler:0,dict:0,profan:0};
+  STATE.blocks=blocks;
+  STATE.cleanBlocks=blocks.map(b=>({...b,clean:cleanText(b.text,opt,c)}));
+  STATE.title=(raw.match(/(\S+회의|\S+미팅|\S+논의|\S+회의록)/)||[])[0]||STATE.title||'회의록';
+  STATE.date=blocks.find(b=>b.ts)?.ts||'';
+  STATE._c=c;
+  renderSpeakers();renderReports();renderDiff();autoSave();
+  return true;
+}
+
+function renderSpeakers(){
+  const labels=[...new Set(STATE.blocks.map(b=>b.speaker))];
+  $('#spkEmpty').classList.toggle('hidden',labels.length>0);
+  $('#spkList').innerHTML=labels.map((l,i)=>{const s=SPK[l];
+    return `<div class="spk">
+      <div class="swatch" style="background:${s.color}"></div>
+      <div class="fields">
+        <div class="lab">감지된 화자: ${esc(l||'(이름 없음)')}</div>
+        <input data-l="${esc(l)}" data-k="name" value="${esc(s.name)}" placeholder="이름 (예: 박혜민 대표)">
+        <input data-l="${esc(l)}" data-k="role" value="${esc(s.role)}" placeholder="역할/소속 (선택)">
+        <div class="palette">${PALETTE.map(c=>`<div class="pdot${c===s.color?' sel':''}" data-l="${esc(l)}" data-c="${c}" style="background:${c}"></div>`).join('')}</div>
+      </div></div>`;}).join('');
+}
+
+function buildData(){
+  const all=STATE.cleanBlocks.map(b=>b.clean).join(' ');
+  const kw=keywords(all,12),sum=summarize(all,kw,6),res=extract(all);
+  const speakers=[...new Set(STATE.blocks.map(b=>b.speaker))];
+  const names=speakers.map(dispName);
+  return{all,kw,sum,res,speakers,names};
+}
+function renderReports(){
+  if(!STATE.cleanBlocks.length)return;
+  const d=buildData();
+  $('#repBanner').innerHTML=`<b>${esc(STATE.title)}</b> · 참석자 ${d.names.map(esc).join(', ')||'미상'} · ${esc(STATE.date||'시간 미상')}`;
+  const today=new Date().toLocaleDateString('ko-KR');
+
+  let r=`<div class="docttl">${esc(STATE.title)}</div>
+    <div class="meta">📅 ${today}${STATE.date?' · 시작 '+esc(STATE.date):''} · 👥 ${d.names.map(esc).join(', ')||'미상'}</div>
+    <div class="chips">${d.kw.slice(0,8).map(k=>`<span class="chip"># ${esc(k[0])}</span>`).join('')}</div>
+    <h3>📌 핵심 요약</h3><ul>${d.sum.map(s=>`<li>${esc(s)}</li>`).join('')||'<li>—</li>'}</ul>
+    <h3>✅ 결정 사항</h3>${d.res.decisions.length?`<ul>${d.res.decisions.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>`:'<div class="lead">명시적 결정 사항이 감지되지 않았습니다.</div>'}
+    <h3>➡️ 다음 단계</h3>${d.res.actions.length?`<ul>${d.res.actions.slice(0,6).map(a=>`<li>${esc(a.text)}${a.owner?` <span class="tag">${esc(a.owner)}</span>`:''}${a.due?` <span class="tag due">${esc(a.due)}</span>`:''}</li>`).join('')}</ul>`:'<div class="lead">—</div>'}
+    <h3>❓ 주요 질문 · 쟁점</h3>${d.res.questions.length?`<ul>${d.res.questions.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>`:'<div class="lead">—</div>'}`;
+  $('#rep-report').innerHTML=r;
+
+  const labels=[...new Set(STATE.blocks.map(b=>b.speaker))];
+  const optTags=labels.map(l=>`<option value="${esc(l)}">${esc(dispName(l))}</option>`).join('');
+  $('#rep-trans').innerHTML=`<input id="tSearch" placeholder="🔍 전사에서 검색…" value="${esc(tSearchTerm)}" style="width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;font-family:inherit;margin-bottom:10px">`
+    +STATE.cleanBlocks.map((b,i)=>`<div class="turn">
+      <div class="head"><span class="swatch" style="width:16px;height:16px;background:${dispColor(b.speaker)}"></span>
+        <span class="who" style="color:${dispColor(b.speaker)}">${esc(dispName(b.speaker))}</span>
+        ${b.ts?`<span class="ts seek" data-seek="${esc(b.ts)}">${esc(b.ts)} ▶</span>`:''}
+        <select data-bi="${i}">${optTags.replace(`value="${esc(b.speaker)}"`,`value="${esc(b.speaker)}" selected`)}</select></div>
+      <div class="body">${esc(b.clean)}</div></div>`).join('');
+  filterTrans();
+
+  $('#rep-todo').innerHTML=d.res.actions.length?('<div id="todoProg" class="lead" style="margin-bottom:10px"></div>'+d.res.actions.map((a,i)=>`<div class="todo">
+      <input type="checkbox" id="td${i}"><label class="t" for="td${i}">${esc(a.text)}
+      <div class="tags">${a.owner?`<span class="tag">👤 ${esc(a.owner)}</span>`:''}${a.due?`<span class="tag due">⏰ ${esc(a.due)}</span>`:'<span class="tag" style="background:#f1f3f8;color:#9aa2b1">기한 미정</span>'}</div></label></div>`).join(''))
+    :'<div class="empty">감지된 할 일이 없습니다. ‘설정 → Claude 정밀모드’로 더 정확히 추출할 수 있어요.</div>';
+  updateTodoProg();
+
+  $('#cleanStats').innerHTML=`<div class="b"><b>${STATE.blocks.length}</b><span>발언</span></div>
+    <div class="b"><b>${STATE._c.filler}</b><span>군말제거</span></div>
+    <div class="b"><b>${STATE._c.dict}</b><span>오인식교정</span></div>
+    <div class="b"><b>${d.res.actions.length}</b><span>할 일</span></div>`;
+  $('#st2').classList.add('done');$('#st3').classList.add('done');
+}
+function renderDiff(){
+  if(!STATE.cleanBlocks.length)return;
+  $('#diffBox').innerHTML=STATE.cleanBlocks.map(b=>`<div class="turn"><div class="head"><span class="who" style="color:${dispColor(b.speaker)}">${esc(dispName(b.speaker))}</span>${b.ts?`<span class="ts">${esc(b.ts)}</span>`:''}</div><div class="body">${diffWords(b.text,b.clean)}</div></div>`).join('');
+}
+
+/* ===== 편의 기능: 보관함·검색·시크·진행률 ===== */
+function loadStore(){try{return JSON.parse(localStorage.getItem('cn_meetings')||'[]');}catch(e){return[];}}
+function saveStore(a){try{localStorage.setItem('cn_meetings',JSON.stringify(a.slice(0,30)));}catch(e){}}
+function autoSave(){
+  if(!$('#raw').value.trim())return;
+  const store=loadStore();
+  STATE.id=STATE.id||('m'+Date.now());
+  const rec={id:STATE.id,title:STATE.title,raw:$('#raw').value,spk:SPK,date:STATE.date,savedAt:Date.now()};
+  const i=store.findIndex(x=>x.id===STATE.id);
+  if(i>=0)store[i]=rec;else store.unshift(rec);
+  saveStore(store);renderStore();
+}
+function renderStore(){
+  const box=$('#storeList');if(!box)return;const store=loadStore();
+  if(!store.length){box.innerHTML='<div class="empty" style="margin-top:0">저장된 회의가 없어요. 보고서를 만들면 자동 저장됩니다.</div>';return;}
+  box.innerHTML=store.map(m=>`<div class="rec" data-open="${m.id}"><div class="ic">🗂️</div>
+    <div class="m"><div class="nm">${esc(m.title||'회의록')}</div><div class="su">${fmtDate(m.savedAt)}${m.date?' · '+esc(m.date):''}</div></div>
+    <button class="go" data-del="${m.id}" style="background:#fdeaec;color:#ef5b6b">✕</button></div>`).join('');
+}
+function openMeeting(id){const m=loadStore().find(x=>x.id===id);if(!m)return;$('#raw').value=m.raw;SPK=m.spk||{};STATE.id=id;process();go('report');toast('회의를 불러왔어요');}
+function delMeeting(id){saveStore(loadStore().filter(x=>x.id!==id));renderStore();toast('삭제했어요');}
+function tsToSec(ts){const p=ts.split(':').map(Number);return p.length===3?p[0]*3600+p[1]*60+p[2]:(p.length===2?p[0]*60+p[1]:0);}
+function seekAudio(ts){const pl=$('#player');if(!pl||!pl.getAttribute('src')){toast('먼저 음성 파일을 불러와 재생하세요');return;}pl.currentTime=tsToSec(ts);pl.play().catch(()=>{});$('#audioBox').classList.remove('hidden');toast('음성 '+ts+' 위치로 이동');}
+function filterTrans(){const q=tSearchTerm.trim().toLowerCase();$$('#rep-trans .turn').forEach(t=>{const b=t.querySelector('.body');const hit=!q||(b&&b.textContent.toLowerCase().includes(q));t.style.display=hit?'':'none';});}
+function updateTodoProg(){const box=$('#todoProg');if(!box)return;const ch=$$('#rep-todo input[type=checkbox]');const done=ch.filter(c=>c.checked).length;const pct=ch.length?Math.round(done/ch.length*100):0;box.innerHTML=`완료 ${done}/${ch.length} · ${pct}%<div style="height:7px;background:#e6e9f0;border-radius:5px;margin-top:5px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--teal);transition:.3s"></div></div>`;}
+
+function reportMd(){const d=buildData(),today=new Date().toLocaleDateString('ko-KR');
+  return `# ${STATE.title}\n\n- 일시: ${today}${STATE.date?' (시작 '+STATE.date+')':''}\n- 참석자: ${d.names.join(', ')||'미상'}\n- 키워드: ${d.kw.slice(0,8).map(k=>k[0]).join(', ')}\n\n## 핵심 요약\n${d.sum.map(s=>'- '+s).join('\n')}\n\n## 결정 사항\n${d.res.decisions.map(s=>'- '+s).join('\n')||'- (감지 없음)'}\n\n## 다음 단계\n${d.res.actions.slice(0,6).map(a=>`- ${a.text}${a.owner?' ('+a.owner+')':''}${a.due?' ['+a.due+']':''}`).join('\n')||'- -'}\n\n## 주요 질문/쟁점\n${d.res.questions.map(s=>'- '+s).join('\n')||'- -'}`;}
+function todoMd(){const d=buildData();return `# 해야 할 일 — ${STATE.title}\n\n${d.res.actions.length?d.res.actions.map(a=>`- [ ] ${a.text} ${a.owner?'(담당: '+a.owner+')':''} ${a.due?'[기한: '+a.due+']':''}`).join('\n'):'- (감지된 할 일 없음)'}`;}
+function transMd(){return `# 전체 전사 — ${STATE.title}\n\n${STATE.cleanBlocks.map(b=>`**${dispName(b.speaker)}**${b.ts?' ['+b.ts+']':''}\n${b.clean}`).join('\n\n')}`;}
+function shareMd(){return reportMd()+'\n\n---\n\n'+todoMd();}
+
+function cleanPrompt(){return `다음은 음성 자동 전사한 한국어 회의록입니다. STT 오인식·띄어쓰기 오류·군말이 많습니다.\n1) 문맥 고려해 오탈자·오인식 교정(고유명사 포함) 2) 군말 제거, 자연스러운 문장 3) 화자/타임스탬프 보존 4) 의미 변경 금지\n\n=== 전사본 ===\n`+($('#raw').value.trim()||'(전사 붙여넣기)');}
+function minPrompt(){return `다음 회의 전사로 한국어 회의록을 작성: 제목, 일시/참석자, 핵심요약(5~7), 결정사항, 할일(담당·기한 표), 쟁점, 다음단계. 사실만 사용, 추측은 [추정] 표기.\n\n=== 전사본 ===\n`+(STATE.cleanBlocks.map(b=>dispName(b.speaker)+(b.ts?' ['+b.ts+']':'')+'\n'+b.clean).join('\n\n')||$('#raw').value.trim());}
+
+let RECS=[];const SORTS=['recent','old','name'];let sortIdx=0,curId=-1;
+const AUDIO_EXT=/\.(mp3|m4a|wav|aac|ogg|amr|flac|opus|3gp|caf|wma|aiff?)$/i;
+const isAudio=f=>(f.type&&f.type.startsWith('audio'))||AUDIO_EXT.test(f.name);
+function fmtSize(b){if(!b)return'';const u=['B','KB','MB','GB'];let i=0,n=b;while(n>=1024&&i<3){n/=1024;i++;}return n.toFixed(i?1:0)+u[i];}
+function fmtDur(s){if(s==null||!isFinite(s))return'';s=Math.round(s);const m=Math.floor(s/60),x=s%60,h=Math.floor(m/60);return h?`${h}:${String(m%60).padStart(2,'0')}:${String(x).padStart(2,'0')}`:`${m}:${String(x).padStart(2,'0')}`;}
+function fmtDate(t){const d=new Date(t),diff=(Date.now()-t)/1000;if(diff<60)return'방금 전';if(diff<3600)return Math.floor(diff/60)+'분 전';if(diff<86400)return Math.floor(diff/3600)+'시간 전';if(diff<604800)return Math.floor(diff/86400)+'일 전';return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
+function addFiles(files){let added=0;for(const f of files){if(!isAudio(f))continue;if(RECS.some(r=>r.name===f.name&&r.size===f.size&&r.date===(f.lastModified||0)))continue;
+  const r={file:f,name:f.name,date:f.lastModified||Date.now(),size:f.size,dur:null,url:URL.createObjectURL(f)};RECS.push(r);added++;
+  const a=new Audio();a.preload='metadata';a.onloadedmetadata=()=>{r.dur=a.duration;renderRecs();};a.src=r.url;}
+  renderRecs();if(added)$('#btnSort').classList.remove('hidden');return added;}
+function renderRecs(){const box=$('#recList'),sort=SORTS[sortIdx],idx=RECS.map((r,i)=>i);
+  if(sort==='recent')idx.sort((a,b)=>RECS[b].date-RECS[a].date);else if(sort==='old')idx.sort((a,b)=>RECS[a].date-RECS[b].date);else idx.sort((a,b)=>RECS[a].name.localeCompare(RECS[b].name,'ko'));
+  if(!RECS.length){box.innerHTML='';return;}
+  const newest=Math.max(...RECS.map(r=>r.date));
+  box.innerHTML=idx.map(i=>{const r=RECS[i],isNew=(sort==='recent'&&r.date===newest);
+    return `<div class="rec${i===curId?' playing':''}" data-id="${i}"><div class="ic">🎙️</div>
+      <div class="m"><div class="nm">${esc(r.name)}</div><div class="su">${isNew?'<span class="new">최신 · </span>':''}${fmtDate(r.date)} · ${fmtSize(r.size)}${r.dur?' · '+fmtDur(r.dur):''}</div></div>
+      <button class="go" data-play="${i}">▶</button></div>`;}).join('');}
+function playRec(i){const r=RECS[i];if(!r)return;curId=i;
+  $('#player').src=r.url;$('#audioBox').classList.remove('hidden');
+  $('#nowPlaying').innerHTML='▶ 재생 중: <b>'+esc(r.name)+'</b>';
+  STATE.title=r.name.replace(AUDIO_EXT,'');
+  $('#player').play().catch(()=>{});renderRecs();
+  toast('제목을 '+STATE.title+'(으)로 설정했어요. 전사를 입력하면 보고서가 자동 생성됩니다');}
+async function openFolder(){
+  if(!window.showDirectoryPicker){toast('이 브라우저는 폴더 열기를 지원하지 않습니다. ‘음성 파일 불러오기’를 쓰세요');return;}
+  try{const dir=await window.showDirectoryPicker(),files=[];
+    async function walk(h,depth){for await(const[name,handle]of h.entries()){if(handle.kind==='file'){if(AUDIO_EXT.test(name)){try{files.push(await handle.getFile());}catch(e){}}}else if(depth<1){try{await walk(handle,depth+1);}catch(e){}}}}
+    await walk(dir,0);if(!files.length){toast('이 폴더에서 음성 파일을 찾지 못했습니다');return;}
+    toast(addFiles(files)+'개 음성 파일을 최근순으로 불러왔습니다');
+  }catch(e){if(e.name!=='AbortError')toast('폴더 열기 오류');}}
+
+let recog=null,recOn=false;
+function toggleRec(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){toast('이 브라우저는 실시간 녹음을 지원하지 않습니다 (Chrome 권장)');return;}
+  if(recOn){recog.stop();return;}
+  recog=new SR();recog.lang='ko-KR';recog.continuous=true;recog.interimResults=true;
+  let base=$('#raw').value;
+  recog.onresult=e=>{let fin='';for(let i=e.resultIndex;i<e.results.length;i++)if(e.results[i].isFinal)fin+=e.results[i][0].transcript+' ';if(fin){base+=fin;$('#raw').value=base;}};
+  recog.onend=()=>{recOn=false;$('#recState').textContent='● 실시간 녹음';};
+  recog.onerror=ev=>toast('녹음 오류: '+ev.error);
+  recog.start();recOn=true;$('#recState').innerHTML='<span class="recdot"></span> 녹음 중지';}
+
+function renderDict(){$('#dictList').innerHTML=DICT.map((d,i)=>`<div class="dictrow"><input data-i="${i}" data-k="0" value="${esc(d[0])}" placeholder="틀린 인식"><span style="color:#9aa2b1">→</span><input data-i="${i}" data-k="1" value="${esc(d[1])}" placeholder="올바른 표현"><button class="x" data-del="${i}">✕</button></div>`).join('');$('#fillerList').value=FILLERS.join(', ');}
+function syncSettings(){$$('#dictList input').forEach(inp=>DICT[+inp.dataset.i][+inp.dataset.k]=inp.value);DICT=DICT.filter(d=>d[0]||d[1]);FILLERS=$('#fillerList').value.split(',').map(s=>s.trim()).filter(Boolean);}
+
+function go(name){$$('.scr').forEach(s=>s.classList.remove('on'));$('#s-'+name).classList.add('on');
+  $$('nav button').forEach(b=>b.classList.toggle('on',b.dataset.go===name));window.scrollTo(0,0);}
+function showRep(r){['report','trans','todo'].forEach(x=>$('#rep-'+x).classList.toggle('hidden',x!==r));
+  $$('#repSeg button').forEach(b=>b.classList.toggle('on',b.dataset.r===r));}
+
+$$('nav button').forEach(b=>b.onclick=()=>go(b.dataset.go));
+$$('#repSeg button').forEach(b=>b.onclick=()=>showRep(b.dataset.r));
+$('#btnGo').onclick=()=>{if(process()){go('report');toast('보고서를 만들었어요');}};
+$('#btnSample').onclick=()=>{$('#raw').value=SAMPLE;toast('샘플 로드됨 — 보고서 생성을 눌러보세요');};
+$('#btnClear').onclick=()=>{$('#raw').value='';};
+$('#btnRec').onclick=toggleRec;
+$('#audioFile').onchange=e=>{const n=addFiles([...e.target.files]);if(n)toast(n+'개 불러옴');e.target.value='';};
+$('#btnFolder').onclick=openFolder;
+$('#btnSort').onclick=()=>{sortIdx=(sortIdx+1)%SORTS.length;$('#btnSort').textContent='정렬: '+({recent:'최근순',old:'오래된순',name:'이름순'}[SORTS[sortIdx]])+' ▾';renderRecs();};
+$('#recList').onclick=e=>{const p=e.target.closest('[data-play]'),it=e.target.closest('[data-id]');if(p)return playRec(+p.dataset.play);if(it)playRec(+it.dataset.id);};
+$('#spkList').addEventListener('input',e=>{const l=e.target.dataset.l,k=e.target.dataset.k;if(l!=null&&k){SPK[l][k]=e.target.value;renderReports();renderDiff();}});
+$('#spkList').addEventListener('click',e=>{if(e.target.classList.contains('pdot')){SPK[e.target.dataset.l].color=e.target.dataset.c;renderSpeakers();renderReports();renderDiff();}});
+$('#rep-trans').addEventListener('change',e=>{if(e.target.dataset.bi!=null){STATE.cleanBlocks[+e.target.dataset.bi].speaker=e.target.value;STATE.blocks[+e.target.dataset.bi].speaker=e.target.value;renderReports();renderSpeakers();}});
+$$('#optFiller,#optSpace,#optDict,#optPunc,#optProfan').forEach(c=>c.onchange=()=>{if(STATE.blocks.length)process();});
+$('#shareAll').onclick=()=>copy(shareMd());
+$('#dlAll').onclick=()=>download((STATE.title||'회의록')+'.md',reportMd()+'\n\n'+todoMd()+'\n\n'+transMd());
+$('#cpPrompt').onclick=()=>copy(cleanPrompt());
+$('#cpPromptMin').onclick=()=>copy(minPrompt());
+$('#addDict').onclick=()=>{syncSettings();DICT.push(['','']);renderDict();};
+$('#dictList').onclick=e=>{if(e.target.dataset.del!=null){syncSettings();DICT.splice(+e.target.dataset.del,1);renderDict();}};
+$('#storeList').onclick=e=>{const dl=e.target.closest('[data-del]'),op=e.target.closest('[data-open]');if(dl){e.stopPropagation();return delMeeting(dl.dataset.del);}if(op)openMeeting(op.dataset.open);};
+$('#rep-trans').addEventListener('input',e=>{if(e.target.id==='tSearch'){tSearchTerm=e.target.value;filterTrans();}});
+$('#rep-trans').addEventListener('click',e=>{const s=e.target.closest('[data-seek]');if(s)seekAudio(s.dataset.seek);});
+$('#rep-todo').addEventListener('change',e=>{if(e.target.type==='checkbox')updateTodoProg();});
+$('#cpReport').onclick=()=>copy(reportMd());
+$('#cpTrans').onclick=()=>copy(transMd());
+$('#cpTodo').onclick=()=>copy(todoMd());
+$('#btnPrint').onclick=()=>window.print();
+
+renderDict();renderRecs();renderStore();
+$('#raw').value=SAMPLE;
+process();
+go('start');
+</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
+</body>
+</html>
