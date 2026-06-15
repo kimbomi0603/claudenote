@@ -179,12 +179,12 @@
         <div id="nowPlaying" class="lead" style="margin:10px 0 0"></div>
         <audio id="player" controls></audio>
       </div>
-      <div class="hint">💡 <b>휴대폰에서 이 앱을 열면</b> 파일 선택 시 휴대폰 녹음 목록이 그대로 떠요. 보안상 웹은 저장소에 직접 접근하지 못해, 불러오기/폴더 방식으로 가져옵니다.</div>
+      <div class="hint">💡 불러온 음성은 <b>재생·정리용</b>이에요. 웹앱은 오디오를 글자로 바꾸지 못해요(음성인식 서버 필요). <b>녹음을 글로 만들려면</b> → 갤럭시 <b>음성 녹음 앱에서 ‘텍스트 변환’</b> → 그 글을 복사해 아래 ‘전사 입력’에 붙여넣거나, <b>공유 → 클로드노트</b>로 보내면 보고서가 자동 생성됩니다.</div>
     </div>
 
     <div class="card">
       <h2>📝 전사 입력</h2>
-      <div class="sub">PLAUD 전사를 붙여넣거나, 마이크로 바로 받아쓰세요. 입력하면 <b>회의록·전체 전사·할 일</b>이 자동으로 만들어집니다.</div>
+      <div class="sub">갤럭시 ‘텍스트 변환’ 결과나 PLAUD 전사를 붙여넣으면, <b>회의록·전체 전사·할 일</b>이 자동으로 만들어지고 바로 공유할 수 있어요.</div>
       <textarea id="raw" placeholder="여기에 회의 전사를 붙여넣기…&#10;예) 화자1 [00:00:01]  안녕하세요 오늘 회의는…"></textarea>
       <div class="grid" style="margin-top:11px">
         <button class="btn ghost sm" id="btnRec"><span id="recState">● 실시간 녹음</span></button>
@@ -558,7 +558,7 @@ $('#spkList').addEventListener('input',e=>{const l=e.target.dataset.l,k=e.target
 $('#spkList').addEventListener('click',e=>{if(e.target.classList.contains('pdot')){SPK[e.target.dataset.l].color=e.target.dataset.c;renderSpeakers();renderReports();renderDiff();}});
 $('#rep-trans').addEventListener('change',e=>{if(e.target.dataset.bi!=null){STATE.cleanBlocks[+e.target.dataset.bi].speaker=e.target.value;STATE.blocks[+e.target.dataset.bi].speaker=e.target.value;renderReports();renderSpeakers();}});
 $$('#optFiller,#optSpace,#optDict,#optPunc,#optProfan').forEach(c=>c.onchange=()=>{if(STATE.blocks.length)process();});
-$('#shareAll').onclick=()=>copy(shareMd());
+$('#shareAll').onclick=async()=>{const t=shareMd();if(navigator.share){try{await navigator.share({title:(STATE.title||'회의록'),text:t});return;}catch(e){if(e.name==='AbortError')return;}}copy(t);};
 $('#dlAll').onclick=()=>download((STATE.title||'회의록')+'.md',reportMd()+'\n\n'+todoMd()+'\n\n'+transMd());
 $('#cpPrompt').onclick=()=>copy(cleanPrompt());
 $('#cpPromptMin').onclick=()=>copy(minPrompt());
@@ -574,9 +574,13 @@ $('#cpTodo').onclick=()=>copy(todoMd());
 $('#btnPrint').onclick=()=>window.print();
 
 renderDict();renderRecs();renderStore();
-$('#raw').value=SAMPLE;
+const _sp=new URLSearchParams(location.search);
+const _shared=((_sp.get('text')||'')+' '+(_sp.get('title')||'')).trim();
+$('#raw').value=_shared||SAMPLE;
+STATE.id=null;
 process();
-go('start');
+go(_shared?'report':'start');
+if(_shared)toast('공유된 전사로 보고서를 만들었어요');
 </script>
 <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
 </body>
