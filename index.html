@@ -178,8 +178,10 @@
       <div id="audioBox" class="hidden">
         <div id="nowPlaying" class="lead" style="margin:10px 0 0"></div>
         <audio id="player" controls></audio>
+        <button class="btn teal" id="btnTranscribe" style="margin-top:10px">📝 이 녹음 받아쓰기 (무료·기기 내 처리)</button>
+        <div id="sttProg" class="hint hidden"></div>
       </div>
-      <div class="hint">💡 불러온 음성은 <b>재생·정리용</b>이에요. 웹앱은 오디오를 글자로 바꾸지 못해요(음성인식 서버 필요). <b>녹음을 글로 만들려면</b> → 갤럭시 <b>음성 녹음 앱에서 ‘텍스트 변환’</b> → 그 글을 복사해 아래 ‘전사 입력’에 붙여넣거나, <b>공유 → 클로드노트</b>로 보내면 보고서가 자동 생성됩니다.</div>
+      <div class="hint">💡 음성을 불러와 재생한 뒤 <b>‘이 녹음 받아쓰기’</b>를 누르면 <b>기기 안에서 무료로 글자 변환</b>돼요(서버·비용 없음, 첫 실행 때 엔진 다운로드). 긴 회의는 처리가 느릴 수 있으니, 그럴 땐 갤럭시 <b>음성 녹음 앱의 ‘텍스트 변환’</b> 결과를 ‘전사 입력’에 붙여넣거나 <b>공유 → 클로드노트</b>로 보내면 더 빨라요.</div>
     </div>
 
     <div class="card">
@@ -524,6 +526,50 @@ async function openFolder(){
     toast(addFiles(files)+'개 음성 파일을 최근순으로 불러왔습니다');
   }catch(e){if(e.name!=='AbortError')toast('폴더 열기 오류');}}
 
+/* ===== 브라우저 내 Whisper 받아쓰기 (Transformers.js, 서버 불필요) ===== */
+let _transcriber=null,_sttBusy=false;
+function sttMsg(m){const p=$('#sttProg');p.classList.remove('hidden');p.innerHTML=m;}
+async function decodeAudio(file){
+  const buf=await file.arrayBuffer();
+  const AC=window.AudioContext||window.webkitAudioContext;
+  const tmp=new AC();
+  const decoded=await tmp.decodeAudioData(buf);
+  if(tmp.close)tmp.close();
+  const off=new OfflineAudioContext(1,Math.max(1,Math.ceil(decoded.duration*16000)),16000);
+  const src=off.createBufferSource();src.buffer=decoded;src.connect(off.destination);src.start();
+  const rendered=await off.startRendering();
+  return rendered.getChannelData(0);
+}
+async function transcribeCurrent(){
+  if(_sttBusy){toast('받아쓰는 중이에요');return;}
+  const r=RECS[curId];
+  if(!r){toast('먼저 녹음을 선택해 재생하세요');return;}
+  _sttBusy=true;
+  try{
+    sttMsg('① 음성 인식 엔진 불러오는 중… <small>(처음 한 번만, 수십 MB 다운로드)</small>');
+    const mod=await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+    mod.env.allowLocalModels=false;
+    if(!_transcriber){
+      _transcriber=await mod.pipeline('automatic-speech-recognition','Xenova/whisper-base',{
+        progress_callback:p=>{if(p.status==='progress'&&p.progress!=null)sttMsg('① 엔진 다운로드 '+Math.round(p.progress)+'% <small>'+(p.file||'')+'</small>');}
+      });
+    }
+    sttMsg('② 오디오 분석 중…');
+    const audio=await decodeAudio(r.file);
+    const mins=Math.round(audio.length/16000/60);
+    sttMsg('③ 받아쓰는 중… <small>약 '+mins+'분 분량, 길면 오래 걸려요. 화면을 켜 두세요.</small>');
+    const out=await _transcriber(audio,{language:'korean',task:'transcribe',chunk_length_s:30,stride_length_s:5});
+    const text=((out&&out.text)||'').trim();
+    if(!text){sttMsg('인식 결과가 비어 있어요. 폰의 텍스트 변환을 권장합니다.');_sttBusy=false;return;}
+    $('#sttProg').classList.add('hidden');
+    $('#raw').value=text;STATE.id=null;STATE.title=r.name.replace(AUDIO_EXT,'')||'회의록';
+    process();go('report');toast('받아쓰기 완료 — 보고서를 만들었어요');
+  }catch(e){
+    sttMsg('받아쓰기 실패: '+((e&&e.message)||e)+'<br><small>네트워크(엔진 다운로드)나 기기 메모리 문제일 수 있어요. 갤럭시 ‘텍스트 변환’ 후 붙여넣기를 권장합니다.</small>');
+  }
+  _sttBusy=false;
+}
+
 let recog=null,recOn=false;
 function toggleRec(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){toast('이 브라우저는 실시간 녹음을 지원하지 않습니다 (Chrome 권장)');return;}
@@ -550,6 +596,7 @@ $('#btnSample').onclick=()=>{$('#raw').value=SAMPLE;toast('샘플 로드됨 — 
 $('#btnClear').onclick=()=>{$('#raw').value='';};
 $('#btnRec').onclick=toggleRec;
 $('#pickAudio').onclick=()=>$('#audioFile').click();
+$('#btnTranscribe').onclick=transcribeCurrent;
 $('#audioFile').onchange=e=>{const n=addFiles([...e.target.files]);if(n)toast(n+'개 불러옴');else toast('음성 파일이 선택되지 않았어요');e.target.value='';};
 $('#btnFolder').onclick=openFolder;
 $('#btnSort').onclick=()=>{sortIdx=(sortIdx+1)%SORTS.length;$('#btnSort').textContent='정렬: '+({recent:'최근순',old:'오래된순',name:'이름순'}[SORTS[sortIdx]])+' ▾';renderRecs();};
