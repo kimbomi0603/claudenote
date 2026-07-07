@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#ffffff">
 <title>클로드노트</title>
-<!-- v8 · 2026-07-08: 녹음기 강화(Wake Lock 화면꺼짐 방지·녹음 타이머·앱 전환 유지) + MP3 저장 + v7(목록·꾹 공유) -->
+<!-- v9 · 2026-07-08: 파일관리자 — 기기 내 보관(IndexedDB, 새로고침 유지) + 파일별 ✕ 삭제 + ➕ 파일 추가 버튼 정비 -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -65,17 +65,19 @@
   .steps .s{flex:1;height:5px;border-radius:3px;background:#dfe4ee}
   .steps .s.done{background:var(--accent)}
   .reclist{display:flex;flex-direction:column;gap:9px;margin-top:13px}
-  .rec{display:flex;align-items:center;gap:11px;background:#fbfcfe;border:1.5px solid var(--line);
-    border-radius:13px;padding:11px 13px;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+  .rec{display:flex;align-items:center;gap:10px;background:#fbfcfe;border:1.5px solid var(--line);
+    border-radius:13px;padding:11px 13px;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;flex-wrap:wrap}
   .rec.playing{border-color:var(--teal);background:var(--teal-soft)}
   .rec .ic{width:38px;height:38px;flex:0 0 auto;border-radius:10px;background:var(--accent-soft);
     display:flex;align-items:center;justify-content:center;font-size:18px}
-  .rec .m{flex:1;min-width:0}
-  .rec .nm{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rec .m{flex:1 1 150px;min-width:0}
+  .rec .nm{font-size:14px;font-weight:700;white-space:normal;word-break:break-all;line-height:1.4}
   .rec .su{font-size:11.5px;color:var(--muted);margin-top:1px}
   .rec .su .new{color:var(--teal);font-weight:800}
-  .rec .go{flex:0 0 auto;width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;
-    border:none;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .rec .go{flex:0 0 auto;width:38px;height:38px;border-radius:50%;background:var(--accent);color:#fff;
+    border:none;display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer}
+  .rec .acts{display:flex;gap:7px;flex:0 0 auto;margin-left:auto;align-items:center}
+  @media(max-width:520px){.rec .acts{flex-basis:100%;justify-content:flex-end;margin-top:7px;padding-top:7px;border-top:1px dashed var(--line)}}
   .empty{text-align:center;color:var(--soft);font-size:13px;padding:22px 10px;border:1.5px dashed var(--line);
     border-radius:13px;margin-top:13px}
   audio{width:100%;margin-top:10px}
@@ -168,9 +170,9 @@
 
     <div class="card">
       <h2>🎙️ 내 음성 파일</h2>
-      <div class="sub">휴대폰 녹음을 불러오면 <b>최신 녹음순</b>으로 보여줘요. 항목을 누르면 바로 재생됩니다.</div>
+      <div class="sub">추가한 파일은 <b>앱 안에 보관</b>되어 새로고침해도 그대로 남아요. 항목을 누르면 재생 · <b>⬇ MP3 저장 · 📝 받아쓰기 · ✕ 삭제</b>.</div>
       <div class="stack">
-        <button class="btn primary" id="pickAudio">📁 음성 파일 불러오기</button>
+        <button class="btn primary" id="pickAudio">➕ 녹음 파일 추가 (여러 개 선택 가능)</button>
         <input type="file" id="audioFile" multiple style="position:absolute;width:1px;height:1px;opacity:0;left:-9999px;pointer-events:none">
         <button class="btn soft" id="btnFolder">🗂️ 폴더에서 한번에 불러오기</button>
       </div>
@@ -519,10 +521,25 @@ const isAudio=f=>(f.type&&f.type.startsWith('audio'))||AUDIO_EXT.test(f.name);
 function fmtSize(b){if(!b)return'';const u=['B','KB','MB','GB'];let i=0,n=b;while(n>=1024&&i<3){n/=1024;i++;}return n.toFixed(i?1:0)+u[i];}
 function fmtDur(s){if(s==null||!isFinite(s))return'';s=Math.round(s);const m=Math.floor(s/60),x=s%60,h=Math.floor(m/60);return h?`${h}:${String(m%60).padStart(2,'0')}:${String(x).padStart(2,'0')}`:`${m}:${String(x).padStart(2,'0')}`;}
 function fmtDate(t){const d=new Date(t),diff=(Date.now()-t)/1000;if(diff<60)return'방금 전';if(diff<3600)return Math.floor(diff/60)+'분 전';if(diff<86400)return Math.floor(diff/3600)+'시간 전';if(diff<604800)return Math.floor(diff/86400)+'일 전';return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
-function addFiles(files){let added=0;for(const f of files){if(!isAudio(f))continue;if(RECS.some(r=>r.name===f.name&&r.size===f.size&&r.date===(f.lastModified||0)))continue;
+/* ===== 파일 보관함 (IndexedDB — 새로고침해도 유지) ===== */
+const DBP=('indexedDB' in window)?new Promise((res)=>{const q=indexedDB.open('cn_files',1);q.onupgradeneeded=()=>{q.result.createObjectStore('files',{keyPath:'key'});};q.onsuccess=()=>res(q.result);q.onerror=()=>res(null);}):Promise.resolve(null);
+function fileKey(f){return f.name+'|'+f.size+'|'+(f.lastModified||0);}
+async function idbPut(f){const db=await DBP;if(!db)return;try{const tx=db.transaction('files','readwrite');tx.objectStore('files').put({key:fileKey(f),name:f.name,size:f.size,date:f.lastModified||Date.now(),blob:f});}catch(e){}}
+async function idbDel(key){const db=await DBP;if(!db)return;try{db.transaction('files','readwrite').objectStore('files').delete(key);}catch(e){}}
+async function idbLoadAll(){const db=await DBP;if(!db)return[];return new Promise(res=>{try{const q=db.transaction('files').objectStore('files').getAll();q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([]);}catch(e){res([]);}});}
+function addFiles(files,persist){if(persist===undefined)persist=true;let added=0;for(const f of files){if(!isAudio(f))continue;if(RECS.some(r=>r.name===f.name&&r.size===f.size&&r.date===(f.lastModified||0)))continue;
   const r={file:f,name:f.name,date:f.lastModified||Date.now(),size:f.size,dur:null,url:URL.createObjectURL(f)};RECS.push(r);added++;
+  if(persist)idbPut(f);
   const a=new Audio();a.preload='metadata';a.onloadedmetadata=()=>{r.dur=a.duration;renderRecs();};a.src=r.url;}
   renderRecs();if(added)$('#btnSort').classList.remove('hidden');return added;}
+function removeRec(i){const r=RECS[i];if(!r)return;
+  idbDel(r.name+'|'+r.size+'|'+r.date);
+  try{URL.revokeObjectURL(r.url);}catch(e){}
+  RECS.splice(i,1);
+  if(curId===i){curId=-1;$('#audioBox').classList.add('hidden');try{$('#player').pause();}catch(e){}}
+  else if(curId>i)curId--;
+  renderRecs();toast('파일을 삭제했어요');}
+async function restoreFiles(){const rows=await idbLoadAll();if(!rows.length)return;const fs=rows.map(r=>{try{return new File([r.blob],r.name,{type:(r.blob&&r.blob.type)||'audio/mpeg',lastModified:r.date});}catch(e){return null;}}).filter(Boolean);if(fs.length){addFiles(fs,false);}}
 function renderRecs(){const box=$('#recList'),sort=SORTS[sortIdx],idx=RECS.map((r,i)=>i);
   if(sort==='recent')idx.sort((a,b)=>RECS[b].date-RECS[a].date);else if(sort==='old')idx.sort((a,b)=>RECS[a].date-RECS[b].date);else idx.sort((a,b)=>RECS[a].name.localeCompare(RECS[b].name,'ko'));
   if(!RECS.length){box.innerHTML='';return;}
@@ -530,9 +547,12 @@ function renderRecs(){const box=$('#recList'),sort=SORTS[sortIdx],idx=RECS.map((
   box.innerHTML=idx.map(i=>{const r=RECS[i],isNew=(sort==='recent'&&r.date===newest);
     return `<div class="rec${i===curId?' playing':''}" data-id="${i}"><div class="ic">🎙️</div>
       <div class="m"><div class="nm">${esc(r.name)}</div><div class="su">${isNew?'<span class="new">최신 · </span>':''}${fmtDate(r.date)} · ${fmtSize(r.size)}${r.dur?' · '+fmtDur(r.dur):''}</div></div>
-      <button class="go" data-dl="${i}" title="MP3로 저장" style="background:#6b21a8">⬇</button>
+      <div class="acts">
+      <button class="go" data-play="${i}" title="재생">▶</button>
       <button class="go" data-stt="${i}" title="이 파일 받아쓰기" style="background:var(--teal)">📝</button>
-      <button class="go" data-play="${i}">▶</button></div>`;}).join('');}
+      <button class="go" data-dl="${i}" title="MP3로 저장" style="background:#6b21a8">⬇</button>
+      <button class="go" data-rm="${i}" title="삭제" style="background:#fdeaec;color:#ef5b6b">✕</button>
+      </div></div>`;}).join('');}
 async function exportMp3(i){
   const r=RECS[i];if(!r)return;
   toast('MP3 변환 중… 파일이 길면 시간이 걸려요');
@@ -734,7 +754,8 @@ $('#audioFile').onchange=e=>{const n=addFiles([...e.target.files]);e.target.valu
   else toast(n+'개 불러옴 — 각 파일의 📝 버튼을 누르면 바로 받아쓰기돼요');};
 $('#btnFolder').onclick=openFolder;
 $('#btnSort').onclick=()=>{sortIdx=(sortIdx+1)%SORTS.length;$('#btnSort').textContent='정렬: '+({recent:'최근순',old:'오래된순',name:'이름순'}[SORTS[sortIdx]])+' ▾';renderRecs();};
-$('#recList').onclick=e=>{const dl=e.target.closest('[data-dl]');if(dl){exportMp3(+dl.dataset.dl);return;}
+$('#recList').onclick=e=>{const rm=e.target.closest('[data-rm]');if(rm){removeRec(+rm.dataset.rm);return;}
+  const dl=e.target.closest('[data-dl]');if(dl){exportMp3(+dl.dataset.dl);return;}
   const st=e.target.closest('[data-stt]');if(st){selectRec(+st.dataset.stt);transcribeCurrent();return;}
   const p=e.target.closest('[data-play]'),it=e.target.closest('[data-id]');if(p)return playRec(+p.dataset.play);if(it)playRec(+it.dataset.id);};
 $('#spkList').addEventListener('input',e=>{const l=e.target.dataset.l,k=e.target.dataset.k;if(l!=null&&k){SPK[l][k]=e.target.value;renderReports();renderDiff();}});
@@ -760,7 +781,7 @@ $('#cpTrans').onclick=()=>copy(transMd());
 $('#cpTodo').onclick=()=>copy(todoMd());
 $('#btnPrint').onclick=()=>window.print();
 
-renderDict();renderRecs();renderStore();renderSttModel();
+renderDict();renderRecs();renderStore();renderSttModel();restoreFiles();
 const _sp=new URLSearchParams(location.search);
 const _shared=((_sp.get('text')||'')+' '+(_sp.get('title')||'')).trim();
 $('#raw').value=_shared||'';
