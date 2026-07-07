@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#ffffff">
 <title>클로드노트</title>
-<!-- v3 · 2026-07-08 업그레이드: 실시간 녹음 음성파일 저장, 받아쓰기 타임스탬프, 자동 재시작, 샘플 자동저장 버그 수정 -->
+<!-- v5 · 2026-07-08: 인식 엔진 선택(빠름/표준/정확/최고) + 단계별 진행 표시(경과시간·처리량) + 공유하기에 전사 포함 -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -180,6 +180,15 @@
         <div id="nowPlaying" class="lead" style="margin:10px 0 0"></div>
         <audio id="player" controls></audio>
         <button class="btn teal" id="btnTranscribe" style="margin-top:10px">📝 이 녹음 받아쓰기 (무료·기기 내 처리)</button>
+        <div style="margin-top:9px">
+          <div class="seg" id="sttModelSeg" style="margin-bottom:0">
+            <button data-m="Xenova/whisper-tiny">⚡ 빠름</button>
+            <button data-m="Xenova/whisper-base">표준</button>
+            <button data-m="Xenova/whisper-small">🎯 정확</button>
+            <button data-m="Xenova/whisper-medium">👑 최고</button>
+          </div>
+          <div class="lead" id="sttModelHint" style="margin-top:6px;font-size:11.5px"></div>
+        </div>
         <div id="sttProg" class="hint hidden"></div>
       </div>
       <div class="hint">💡 PLAUD처럼 <b>녹음 파일을 넣으면 자동으로 받아쓰기</b>가 시작돼요(기기 안 무료 처리, 서버·비용 없음, 첫 실행 때 엔진 다운로드). 여러 개를 넣었다면 각 파일의 <b>📝 버튼</b> 한 번이면 됩니다. <b>구간별 타임스탬프</b>가 붙어 전사에서 해당 위치를 바로 재생할 수 있어요. 긴 회의는 처리가 느릴 수 있으니, 그럴 땐 갤럭시 <b>음성 녹음 앱의 ‘텍스트 변환’</b> 결과를 붙여넣거나 <b>공유 → 클로드노트</b>로 보내면 더 빨라요.</div>
@@ -214,7 +223,7 @@
     <div class="banner" id="repBanner">전사를 입력하면 세 가지 보고서가 자동 생성됩니다.</div>
     <div class="card">
       <div class="grid">
-        <button class="btn primary sm" id="shareAll">📤 팀 공유용 전체 복사</button>
+        <button class="btn primary sm" id="shareAll">📤 공유하기 (회의록·전사·할일)</button>
         <button class="btn soft sm" id="dlAll">⬇️ 전체 .md</button>
       </div>
       <div class="grid" style="margin-top:8px">
@@ -492,7 +501,7 @@ function reportMd(){const d=buildData(),today=new Date().toLocaleDateString('ko-
   return `# ${STATE.title}\n\n- 일시: ${today}${STATE.date?' (시작 '+STATE.date+')':''}\n- 참석자: ${d.names.join(', ')||'미상'}\n- 키워드: ${d.kw.slice(0,8).map(k=>k[0]).join(', ')}\n\n## 핵심 요약\n${d.sum.map(s=>'- '+s).join('\n')}\n\n## 결정 사항\n${d.res.decisions.map(s=>'- '+s).join('\n')||'- (감지 없음)'}\n\n## 다음 단계\n${d.res.actions.slice(0,6).map(a=>`- ${a.text}${a.owner?' ('+a.owner+')':''}${a.due?' ['+a.due+']':''}`).join('\n')||'- -'}\n\n## 주요 질문/쟁점\n${d.res.questions.map(s=>'- '+s).join('\n')||'- -'}`;}
 function todoMd(){const d=buildData();return `# 해야 할 일 — ${STATE.title}\n\n${d.res.actions.length?d.res.actions.map(a=>`- [ ] ${a.text} ${a.owner?'(담당: '+a.owner+')':''} ${a.due?'[기한: '+a.due+']':''}`).join('\n'):'- (감지된 할 일 없음)'}`;}
 function transMd(){return `# 전체 전사 — ${STATE.title}\n\n${STATE.cleanBlocks.map(b=>`**${dispName(b.speaker)}**${b.ts?' ['+b.ts+']':''}\n${b.clean}`).join('\n\n')}`;}
-function shareMd(){return reportMd()+'\n\n---\n\n'+todoMd();}
+function shareMd(){return reportMd()+'\n\n---\n\n'+transMd()+'\n\n---\n\n'+todoMd();}
 
 function cleanPrompt(){return `다음은 음성 자동 전사한 한국어 회의록입니다. STT 오인식·띄어쓰기 오류·군말이 많습니다.\n1) 문맥 고려해 오탈자·오인식 교정(고유명사 포함) 2) 군말 제거, 자연스러운 문장 3) 화자/타임스탬프 보존 4) 의미 변경 금지\n\n=== 전사본 ===\n`+($('#raw').value.trim()||'(전사 붙여넣기)');}
 function minPrompt(){return `다음 회의 전사로 한국어 회의록을 작성: 제목, 일시/참석자, 핵심요약(5~7), 결정사항, 할일(담당·기한 표), 쟁점, 다음단계. 사실만 사용, 추측은 [추정] 표기.\n\n=== 전사본 ===\n`+(STATE.cleanBlocks.map(b=>dispName(b.speaker)+(b.ts?' ['+b.ts+']':'')+'\n'+b.clean).join('\n\n')||$('#raw').value.trim());}
@@ -535,7 +544,29 @@ async function openFolder(){
   }catch(e){if(e.name!=='AbortError')toast('폴더 열기 오류');}}
 
 /* ===== 브라우저 내 Whisper 받아쓰기 (Transformers.js, 서버 불필요) ===== */
-let _transcriber=null,_sttBusy=false;
+const STT_MODELS={
+  'Xenova/whisper-tiny':{label:'⚡ 빠름',dl:'약 40MB',note:'속도 최우선 — 짧은 음성 메모용'},
+  'Xenova/whisper-base':{label:'표준',dl:'약 60MB',note:'속도·정확도 균형'},
+  'Xenova/whisper-small':{label:'🎯 정확',dl:'약 190MB',note:'한국어 인식 크게 향상 — 회의 전사 권장'},
+  'Xenova/whisper-medium':{label:'👑 최고',dl:'약 600MB',note:'최고 정확도 — PC·와이파이 권장, 휴대폰은 느리거나 메모리 부족할 수 있음'}
+};
+let STT_MODEL=(function(){try{const m=localStorage.getItem('cn_sttmodel');return STT_MODELS[m]?m:'Xenova/whisper-base';}catch(e){return 'Xenova/whisper-base';}})();
+const _transcribers={};
+let _sttBusy=false;
+/* 진행 표시: 단계별 경과 시간 + 살아있음 표시 */
+let _sttTick=null,_sttT0=0,_sttStageTxt='';
+function sttStage(stage,extra){
+  if(stage!==_sttStageTxt){_sttStageTxt=stage;_sttT0=Date.now();}
+  clearInterval(_sttTick);
+  const upd=()=>{const s=Math.round((Date.now()-_sttT0)/1000);const m=Math.floor(s/60);const tt=m?(m+'분 '+(s%60)+'초'):(s+'초');sttMsg('<span class="recdot"></span> '+stage+'… <small>⏱ '+tt+' 경과 · <b>진행 중이에요</b> — 화면을 켜 둔 채 기다려 주세요'+(extra?' · '+extra:'')+'</small>');};
+  upd();_sttTick=setInterval(upd,1000);
+}
+function sttDone(){clearInterval(_sttTick);_sttTick=null;_sttStageTxt='';}
+function renderSttModel(){
+  $$('#sttModelSeg button').forEach(b=>b.classList.toggle('on',b.dataset.m===STT_MODEL));
+  const m=STT_MODELS[STT_MODEL];
+  $('#sttModelHint').innerHTML='인식 엔진: <b>'+m.label+'</b> · 첫 사용 시 '+m.dl+' 다운로드(한 번만) · '+m.note+(_transcribers[STT_MODEL]?' · <b style="color:var(--teal)">준비됨 ✓</b>':'');
+}
 function sttMsg(m){const p=$('#sttProg');p.classList.remove('hidden');p.innerHTML=m;}
 function tsLabel(sec){sec=Math.max(0,Math.floor(sec||0));const m=Math.floor(sec/60),s=sec%60;return '['+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+']';}
 async function decodeAudio(file){
@@ -554,26 +585,28 @@ async function transcribeCurrent(){
   const r=RECS[curId];
   if(!r){toast('먼저 녹음을 선택해 재생하세요');return;}
   _sttBusy=true;
+  const model=STT_MODEL,mLabel=STT_MODELS[model].label;
   try{
-    sttMsg('① 음성 인식 엔진 불러오는 중… <small>(처음 한 번만, 수십 MB 다운로드)</small>');
+    sttStage('① 음성 인식 엔진('+mLabel+') 준비 중','처음 한 번만 '+STT_MODELS[model].dl+' 다운로드');
     const mod=await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
     mod.env.allowLocalModels=false;
-    if(!_transcriber){
-      _transcriber=await mod.pipeline('automatic-speech-recognition','Xenova/whisper-base',{
-        progress_callback:p=>{if(p.status==='progress'&&p.progress!=null)sttMsg('① 엔진 다운로드 '+Math.round(p.progress)+'% <small>'+(p.file||'')+'</small>');}
+    if(!_transcribers[model]){
+      _transcribers[model]=await mod.pipeline('automatic-speech-recognition',model,{
+        progress_callback:p=>{if(p.status==='progress'&&p.progress!=null){clearInterval(_sttTick);sttMsg('<span class="recdot"></span> ① 엔진('+mLabel+') 다운로드 <b>'+Math.round(p.progress)+'%</b> <small>'+(p.file||'')+' · 진행 중이에요</small>');}}
       });
+      renderSttModel();
     }
-    sttMsg('② 오디오 분석 중…');
+    const _transcriber=_transcribers[model];
+    sttStage('② 오디오 분석 중','파일이 크면 1~2분 걸려요');
     let audio;
     try{audio=await decodeAudio(r.file);}
-    catch(e){sttMsg('이 형식('+esc(r.name.split('.').pop())+')은 브라우저가 디코딩하지 못했어요. mp3·m4a·wav로 변환하거나, 갤럭시 ‘텍스트 변환’ 결과를 붙여넣어 주세요.');_sttBusy=false;return;}
+    catch(e){sttDone();sttMsg('이 형식('+esc(r.name.split('.').pop())+')은 브라우저가 디코딩하지 못했어요. mp3·m4a·wav로 변환하거나, 갤럭시 ‘텍스트 변환’ 결과를 붙여넣어 주세요.');_sttBusy=false;return;}
     const mins=Math.max(1,Math.round(audio.length/16000/60));
-    const t0=Date.now();
-    sttMsg('③ 받아쓰는 중… <small>약 '+mins+'분 분량, 길면 오래 걸려요. 화면을 켜 두세요.</small>');
-    const tick=setInterval(()=>{sttMsg('③ 받아쓰는 중… <small>약 '+mins+'분 분량 · 경과 '+Math.round((Date.now()-t0)/1000)+'초 — 화면을 켜 두세요.</small>');},5000);
+    let doneSec=0;
+    sttStage('③ 받아쓰는 중','전체 약 '+mins+'분 분량');
     let out;
-    try{out=await _transcriber(audio,{language:'korean',task:'transcribe',chunk_length_s:30,stride_length_s:5,return_timestamps:true});}
-    finally{clearInterval(tick);}
+    try{out=await _transcriber(audio,{language:'korean',task:'transcribe',chunk_length_s:30,stride_length_s:5,return_timestamps:true,chunk_callback:function(){doneSec+=25;sttStage('③ 받아쓰는 중','약 '+mins+'분 중 <b>'+Math.min(mins,Math.max(1,Math.round(doneSec/60)))+'분</b> 처리 완료');}});}
+    finally{sttDone();}
     let text='';
     if(out&&out.chunks&&out.chunks.length){
       /* 구간별 타임스탬프를 헤더로 붙여, 전사 화면에서 ▶ 클릭 시 해당 위치 재생 가능 */
@@ -587,12 +620,14 @@ async function transcribeCurrent(){
     if(!text){sttMsg('인식 결과가 비어 있어요. 폰의 텍스트 변환을 권장합니다.');_sttBusy=false;return;}
     $('#sttProg').classList.add('hidden');
     $('#raw').value=text;STATE.id=null;STATE.title=r.name.replace(AUDIO_EXT,'')||'회의록';
-    process();go('report');toast('받아쓰기 완료 — 보고서를 만들었어요');
+    process();go('report');toast('받아쓰기 완료! 상단 📤 공유하기로 회의록·전사를 바로 보낼 수 있어요');
   }catch(e){
-    sttMsg('받아쓰기 실패: '+((e&&e.message)||e)+'<br><small>네트워크(엔진 다운로드)나 기기 메모리 문제일 수 있어요. 갤럭시 ‘텍스트 변환’ 후 붙여넣기를 권장합니다.</small>');
+    sttDone();
+    sttMsg('받아쓰기 실패: '+((e&&e.message)||e)+'<br><small>네트워크(엔진 다운로드)나 기기 메모리 문제일 수 있어요. ‘'+mLabel+'’ 엔진에서 실패했다면 ‘표준’이나 ‘⚡ 빠름’으로 낮춰 다시 시도해 보세요.</small>');
   }
   _sttBusy=false;
 }
+$('#sttModelSeg').onclick=e=>{const b=e.target.closest('[data-m]');if(!b)return;STT_MODEL=b.dataset.m;try{localStorage.setItem('cn_sttmodel',STT_MODEL);}catch(_){}renderSttModel();toast('인식 엔진: '+STT_MODELS[STT_MODEL].label+' — 다음 받아쓰기부터 적용돼요');};
 
 /* ===== 실시간 녹음: 받아쓰기 + 음성 파일 저장 + 자동 재시작 + 타임스탬프 ===== */
 let recog=null,recOn=false,recUserStop=false,recStart=0,mediaRec=null,mediaChunks=[];
@@ -685,7 +720,7 @@ $('#cpTrans').onclick=()=>copy(transMd());
 $('#cpTodo').onclick=()=>copy(todoMd());
 $('#btnPrint').onclick=()=>window.print();
 
-renderDict();renderRecs();renderStore();
+renderDict();renderRecs();renderStore();renderSttModel();
 const _sp=new URLSearchParams(location.search);
 const _shared=((_sp.get('text')||'')+' '+(_sp.get('title')||'')).trim();
 $('#raw').value=_shared||SAMPLE;
