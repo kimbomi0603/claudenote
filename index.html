@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#ffffff">
 <title>클로드노트</title>
-<!-- v7 · 2026-07-08: 최근 회의 목록 복원(자동저장) + 꾹 눌러 공유 + ✕ 삭제 + 샘플 기본 로드 제거 유지 -->
+<!-- v8 · 2026-07-08: 녹음기 강화(Wake Lock 화면꺼짐 방지·녹음 타이머·앱 전환 유지) + MP3 저장 + v7(목록·꾹 공유) -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -205,7 +205,7 @@
       </div>
       <div id="recInterim" class="lead" style="margin-top:8px;color:var(--soft);min-height:0"></div>
       <button class="btn teal" id="btnGo" style="margin-top:11px">✨ 보고서 자동 생성</button>
-      <div class="hint">실시간 녹음은 Chrome/Edge(휴대폰 포함)에서 한국어로 받아 적어요. 이제 <b>녹음 음성도 파일로 함께 저장</b>되어 ‘내 음성 파일’ 목록에 들어가고, 문장마다 <b>[분:초] 타임스탬프</b>가 자동으로 붙습니다. 조용해져도 자동으로 이어서 녹음돼요.</div>
+      <div class="hint">🎙️ <b>조용한 녹음기 모드</b>: 녹음 중엔 <b>화면이 저절로 꺼지지 않게 잠금</b>(Wake Lock)되고 상단에 <b>경과 시간</b>이 표시돼요. 음성은 파일로 저장되어 목록에 들어가고(<b>⬇ 버튼으로 MP3 저장</b> 가능), 문장마다 [분:초] 타임스탬프가 붙으며, 조용해져도 자동으로 이어 녹음됩니다. 다른 앱으로 잠깐 전환해도 녹음은 유지돼요(받아쓰기는 돌아오면 재개 — 녹음 파일은 나중에 📝로 전체 받아쓰기 가능). ※ <b>통화 녹음</b>과 화면을 완전히 끈 장시간 녹음은 웹앱 보안 정책상 불가 — 그 경우 폰 기본 녹음앱으로 녹음한 뒤 파일을 여기 불러오면 자동 전사됩니다.</div>
     </div>
   </section>
 
@@ -530,8 +530,31 @@ function renderRecs(){const box=$('#recList'),sort=SORTS[sortIdx],idx=RECS.map((
   box.innerHTML=idx.map(i=>{const r=RECS[i],isNew=(sort==='recent'&&r.date===newest);
     return `<div class="rec${i===curId?' playing':''}" data-id="${i}"><div class="ic">🎙️</div>
       <div class="m"><div class="nm">${esc(r.name)}</div><div class="su">${isNew?'<span class="new">최신 · </span>':''}${fmtDate(r.date)} · ${fmtSize(r.size)}${r.dur?' · '+fmtDur(r.dur):''}</div></div>
+      <button class="go" data-dl="${i}" title="MP3로 저장" style="background:#6b21a8">⬇</button>
       <button class="go" data-stt="${i}" title="이 파일 받아쓰기" style="background:var(--teal)">📝</button>
       <button class="go" data-play="${i}">▶</button></div>`;}).join('');}
+async function exportMp3(i){
+  const r=RECS[i];if(!r)return;
+  toast('MP3 변환 중… 파일이 길면 시간이 걸려요');
+  try{
+    if(!window.lamejs){await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+    const buf=await r.file.arrayBuffer();
+    const AC=window.AudioContext||window.webkitAudioContext;const tmp=new AC();
+    const dec=await tmp.decodeAudioData(buf);if(tmp.close)tmp.close();
+    const off=new OfflineAudioContext(1,Math.max(1,Math.ceil(dec.duration*44100)),44100);
+    const src=off.createBufferSource();src.buffer=dec;src.connect(off.destination);src.start();
+    const ren=await off.startRendering();const pcm=ren.getChannelData(0);
+    const enc=new lamejs.Mp3Encoder(1,44100,128);
+    const s16=new Int16Array(pcm.length);
+    for(let j=0;j<pcm.length;j++){const v=Math.max(-1,Math.min(1,pcm[j]));s16[j]=v<0?v*32768:v*32767;}
+    const chunks=[];const BS=1152;
+    for(let j=0;j<s16.length;j+=BS){const mb=enc.encodeBuffer(s16.subarray(j,j+BS));if(mb.length)chunks.push(mb);}
+    const end=enc.flush();if(end.length)chunks.push(end);
+    const blob=new Blob(chunks,{type:'audio/mp3'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=r.name.replace(AUDIO_EXT,'')+'.mp3';a.click();
+    toast('MP3 저장 완료 — 다운로드 폴더를 확인하세요');
+  }catch(e){toast('MP3 변환 실패: '+((e&&e.message)||e));}
+}
 function selectRec(i){const r=RECS[i];if(!r)return;curId=i;
   $('#player').src=r.url;$('#audioBox').classList.remove('hidden');
   $('#nowPlaying').innerHTML='🎙️ 선택됨: <b>'+esc(r.name)+'</b>';
@@ -636,9 +659,14 @@ async function transcribeCurrent(){
 }
 $('#sttModelSeg').onclick=e=>{const b=e.target.closest('[data-m]');if(!b)return;STT_MODEL=b.dataset.m;try{localStorage.setItem('cn_sttmodel',STT_MODEL);}catch(_){}renderSttModel();toast('인식 엔진: '+STT_MODELS[STT_MODEL].label+' — 다음 받아쓰기부터 적용돼요');};
 
-/* ===== 실시간 녹음: 받아쓰기 + 음성 파일 저장 + 자동 재시작 + 타임스탬프 ===== */
-let recog=null,recOn=false,recUserStop=false,recStart=0,mediaRec=null,mediaChunks=[];
+/* ===== 실시간 녹음: 받아쓰기 + 음성 파일 저장 + 자동 재시작 + 타임스탬프 + Wake Lock ===== */
+let recog=null,recOn=false,recUserStop=false,recStart=0,mediaRec=null,mediaChunks=[],recTimer=null,_wl=null;
 function recTs(){return tsLabel((Date.now()-recStart)/1000);}
+async function lockScreen(){try{if(navigator.wakeLock)_wl=await navigator.wakeLock.request('screen');}catch(e){}}
+function unlockScreen(){try{if(_wl)_wl.release();}catch(e){}_wl=null;}
+document.addEventListener('visibilitychange',()=>{if(recOn&&document.visibilityState==='visible')lockScreen();});
+function startRecTimer(){clearInterval(recTimer);recTimer=setInterval(()=>{if(!recOn)return;const s=Math.floor((Date.now()-recStart)/1000);$('#recState').innerHTML='<span class="recdot"></span> '+String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')+' 녹음 중 — 누르면 중지';},1000);}
+function stopRecUI(){clearInterval(recTimer);recTimer=null;unlockScreen();$('#recState').textContent='● 실시간 녹음';$('#recInterim').textContent='';}
 async function startMediaRec(){
   try{
     if(!navigator.mediaDevices||!window.MediaRecorder)return;
@@ -664,7 +692,7 @@ function toggleRec(){const SR=window.SpeechRecognition||window.webkitSpeechRecog
   if(!SR){toast('이 브라우저는 실시간 녹음을 지원하지 않습니다 (Chrome 권장)');return;}
   if(recOn){recUserStop=true;recOn=false;try{recog.stop();}catch(e){}
     if(mediaRec&&mediaRec.state!=='inactive')mediaRec.stop();
-    $('#recState').textContent='● 실시간 녹음';$('#recInterim').textContent='';return;}
+    stopRecUI();return;}
   recog=new SR();recog.lang='ko-KR';recog.continuous=true;recog.interimResults=true;
   recUserStop=false;recStart=Date.now();
   let base=$('#raw').value.trim()?$('#raw').value.replace(/\s+$/,'')+'\n\n':'';
@@ -676,13 +704,13 @@ function toggleRec(){const SR=window.SpeechRecognition||window.webkitSpeechRecog
   };
   recog.onend=()=>{
     if(recOn&&!recUserStop){try{recog.start();return;}catch(e){}}
-    recOn=false;$('#recState').textContent='● 실시간 녹음';$('#recInterim').textContent='';
+    recOn=false;stopRecUI();
     if(mediaRec&&mediaRec.state!=='inactive')mediaRec.stop();
   };
   recog.onerror=ev=>{if(ev.error==='no-speech'||ev.error==='aborted')return;toast('녹음 오류: '+ev.error);};
   recog.start();recOn=true;$('#recState').innerHTML='<span class="recdot"></span> 녹음 중지';
-  startMediaRec();
-  toast('녹음 시작 — 말하면 자동으로 받아 적고, 음성도 저장돼요');}
+  startMediaRec();lockScreen();startRecTimer();
+  toast('녹음 시작 — 화면 꺼짐을 막고, 음성도 함께 저장해요');}
 
 function renderDict(){$('#dictList').innerHTML=DICT.map((d,i)=>`<div class="dictrow"><input data-i="${i}" data-k="0" value="${esc(d[0])}" placeholder="틀린 인식"><span style="color:#9aa2b1">→</span><input data-i="${i}" data-k="1" value="${esc(d[1])}" placeholder="올바른 표현"><button class="x" data-del="${i}">✕</button></div>`).join('');$('#fillerList').value=FILLERS.join(', ');}
 function syncSettings(){$$('#dictList input').forEach(inp=>DICT[+inp.dataset.i][+inp.dataset.k]=inp.value);DICT=DICT.filter(d=>d[0]||d[1]);FILLERS=$('#fillerList').value.split(',').map(s=>s.trim()).filter(Boolean);}
@@ -706,7 +734,8 @@ $('#audioFile').onchange=e=>{const n=addFiles([...e.target.files]);e.target.valu
   else toast(n+'개 불러옴 — 각 파일의 📝 버튼을 누르면 바로 받아쓰기돼요');};
 $('#btnFolder').onclick=openFolder;
 $('#btnSort').onclick=()=>{sortIdx=(sortIdx+1)%SORTS.length;$('#btnSort').textContent='정렬: '+({recent:'최근순',old:'오래된순',name:'이름순'}[SORTS[sortIdx]])+' ▾';renderRecs();};
-$('#recList').onclick=e=>{const st=e.target.closest('[data-stt]');if(st){selectRec(+st.dataset.stt);transcribeCurrent();return;}
+$('#recList').onclick=e=>{const dl=e.target.closest('[data-dl]');if(dl){exportMp3(+dl.dataset.dl);return;}
+  const st=e.target.closest('[data-stt]');if(st){selectRec(+st.dataset.stt);transcribeCurrent();return;}
   const p=e.target.closest('[data-play]'),it=e.target.closest('[data-id]');if(p)return playRec(+p.dataset.play);if(it)playRec(+it.dataset.id);};
 $('#spkList').addEventListener('input',e=>{const l=e.target.dataset.l,k=e.target.dataset.k;if(l!=null&&k){SPK[l][k]=e.target.value;renderReports();renderDiff();}});
 $('#spkList').addEventListener('click',e=>{if(e.target.classList.contains('pdot')){SPK[e.target.dataset.l].color=e.target.dataset.c;renderSpeakers();renderReports();renderDiff();}});
