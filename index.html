@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#ffffff">
 <title>클로드노트</title>
-<!-- v5 · 2026-07-08: 인식 엔진 선택(빠름/표준/정확/최고) + 단계별 진행 표시(경과시간·처리량) + 공유하기에 전사 포함 -->
+<!-- v6 · 2026-07-08: 개인정보 보호 모드(자동저장 제거·기존 저장분 삭제·샘플 기본 로드 제거) + v5(엔진 선택·진행표시·공유 강화) -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -160,9 +160,9 @@
   <section class="scr on" id="s-start">
     <div class="steps"><div class="s done"></div><div class="s" id="st2"></div><div class="s" id="st3"></div></div>
 
-    <div class="card" id="storeCard">
+    <div class="card hidden" id="storeCard">
       <h2>🗂️ 최근 회의</h2>
-      <div class="sub">보고서를 만들면 자동 저장돼요. 눌러서 다시 열고, ✕로 삭제합니다.</div>
+      <div class="sub">개인정보 보호를 위해 자동 저장은 꺼져 있습니다 — 보고서는 공유 후 앱에 남지 않아요.</div>
       <div id="storeList"></div>
     </div>
 
@@ -474,14 +474,8 @@ function renderDiff(){
 function loadStore(){try{return JSON.parse(localStorage.getItem('cn_meetings')||'[]');}catch(e){return[];}}
 function saveStore(a){try{localStorage.setItem('cn_meetings',JSON.stringify(a.slice(0,30)));}catch(e){}}
 function autoSave(){
-  const rv=$('#raw').value;
-  if(!rv.trim()||rv===SAMPLE)return; /* 샘플은 저장하지 않음 (자동저장 오염 버그 수정) */
-  const store=loadStore();
-  STATE.id=STATE.id||('m'+Date.now());
-  const rec={id:STATE.id,title:STATE.title,raw:rv,spk:SPK,date:STATE.date,savedAt:Date.now()};
-  const i=store.findIndex(x=>x.id===STATE.id);
-  if(i>=0)store[i]=rec;else store.unshift(rec);
-  saveStore(store);renderStore();
+  /* v6: 개인정보 보호 — 회의 내용을 앱에 저장하지 않습니다 (공유 후 즉시 폐기) */
+  return;
 }
 function renderStore(){
   const box=$('#storeList');if(!box)return;const store=loadStore();
@@ -720,14 +714,14 @@ $('#cpTrans').onclick=()=>copy(transMd());
 $('#cpTodo').onclick=()=>copy(todoMd());
 $('#btnPrint').onclick=()=>window.print();
 
-renderDict();renderRecs();renderStore();renderSttModel();
+renderDict();renderRecs();renderSttModel();
+try{localStorage.removeItem('cn_meetings');}catch(e){} /* v6: 기존 저장분도 삭제 */
 const _sp=new URLSearchParams(location.search);
 const _shared=((_sp.get('text')||'')+' '+(_sp.get('title')||'')).trim();
-$('#raw').value=_shared||SAMPLE;
+$('#raw').value=_shared||'';
 STATE.id=null;
-process();
-go(_shared?'report':'start');
-if(_shared)toast('공유된 전사로 보고서를 만들었어요');
+if(_shared){process();go('report');toast('공유된 전사로 보고서를 만들었어요');}
+else{go('start');}
 </script>
 <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
 </body>
