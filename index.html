@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#ffffff">
 <title>클로드노트</title>
-<!-- v6 · 2026-07-08: 개인정보 보호 모드(자동저장 제거·기존 저장분 삭제·샘플 기본 로드 제거) + v5(엔진 선택·진행표시·공유 강화) -->
+<!-- v7 · 2026-07-08: 최근 회의 목록 복원(자동저장) + 꾹 눌러 공유 + ✕ 삭제 + 샘플 기본 로드 제거 유지 -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -66,7 +66,7 @@
   .steps .s.done{background:var(--accent)}
   .reclist{display:flex;flex-direction:column;gap:9px;margin-top:13px}
   .rec{display:flex;align-items:center;gap:11px;background:#fbfcfe;border:1.5px solid var(--line);
-    border-radius:13px;padding:11px 13px;cursor:pointer}
+    border-radius:13px;padding:11px 13px;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
   .rec.playing{border-color:var(--teal);background:var(--teal-soft)}
   .rec .ic{width:38px;height:38px;flex:0 0 auto;border-radius:10px;background:var(--accent-soft);
     display:flex;align-items:center;justify-content:center;font-size:18px}
@@ -160,9 +160,9 @@
   <section class="scr on" id="s-start">
     <div class="steps"><div class="s done"></div><div class="s" id="st2"></div><div class="s" id="st3"></div></div>
 
-    <div class="card hidden" id="storeCard">
+    <div class="card" id="storeCard">
       <h2>🗂️ 최근 회의</h2>
-      <div class="sub">개인정보 보호를 위해 자동 저장은 꺼져 있습니다 — 보고서는 공유 후 앱에 남지 않아요.</div>
+      <div class="sub">보고서를 만들면 자동 저장돼요. 누르면 다시 열기 · <b>꾹 누르면 바로 공유</b> · ✕로 삭제.</div>
       <div id="storeList"></div>
     </div>
 
@@ -474,8 +474,21 @@ function renderDiff(){
 function loadStore(){try{return JSON.parse(localStorage.getItem('cn_meetings')||'[]');}catch(e){return[];}}
 function saveStore(a){try{localStorage.setItem('cn_meetings',JSON.stringify(a.slice(0,30)));}catch(e){}}
 function autoSave(){
-  /* v6: 개인정보 보호 — 회의 내용을 앱에 저장하지 않습니다 (공유 후 즉시 폐기) */
-  return;
+  const rv=$('#raw').value;
+  if(!rv.trim()||rv===SAMPLE)return; /* 샘플은 저장하지 않음 */
+  const store=loadStore();
+  STATE.id=STATE.id||('m'+Date.now());
+  const rec={id:STATE.id,title:STATE.title,raw:rv,spk:SPK,date:STATE.date,savedAt:Date.now()};
+  const i=store.findIndex(x=>x.id===STATE.id);
+  if(i>=0)store[i]=rec;else store.unshift(rec);
+  saveStore(store);renderStore();
+}
+function shareMeeting(id){
+  const m=loadStore().find(x=>x.id===id);if(!m)return;
+  $('#raw').value=m.raw;SPK=m.spk||{};STATE.id=id;process();
+  const t=shareMd();
+  if(navigator.share){navigator.share({title:(STATE.title||'회의록'),text:t}).catch(function(e){if(e&&e.name!=='AbortError')copy(t);});}
+  else copy(t);
 }
 function renderStore(){
   const box=$('#storeList');if(!box)return;const store=loadStore();
@@ -705,7 +718,11 @@ $('#cpPrompt').onclick=()=>copy(cleanPrompt());
 $('#cpPromptMin').onclick=()=>copy(minPrompt());
 $('#addDict').onclick=()=>{syncSettings();DICT.push(['','']);renderDict();};
 $('#dictList').onclick=e=>{if(e.target.dataset.del!=null){syncSettings();DICT.splice(+e.target.dataset.del,1);renderDict();}};
-$('#storeList').onclick=e=>{const dl=e.target.closest('[data-del]'),op=e.target.closest('[data-open]');if(dl){e.stopPropagation();return delMeeting(dl.dataset.del);}if(op)openMeeting(op.dataset.open);};
+let _lpTimer=null,_lpFired=false;
+$('#storeList').addEventListener('pointerdown',e=>{const it=e.target.closest('[data-open]');if(!it||e.target.closest('[data-del]'))return;_lpFired=false;clearTimeout(_lpTimer);_lpTimer=setTimeout(()=>{_lpFired=true;if(navigator.vibrate)try{navigator.vibrate(30);}catch(_){}toast('손을 떼면 공유 창이 열려요');},550);});
+['pointerup','pointercancel','pointerleave'].forEach(ev=>$('#storeList').addEventListener(ev,()=>clearTimeout(_lpTimer)));
+$('#storeList').addEventListener('contextmenu',e=>{if(e.target.closest('[data-open]'))e.preventDefault();});
+$('#storeList').onclick=e=>{const dl=e.target.closest('[data-del]'),op=e.target.closest('[data-open]');if(dl){e.stopPropagation();return delMeeting(dl.dataset.del);}if(op){if(_lpFired){_lpFired=false;shareMeeting(op.dataset.open);}else openMeeting(op.dataset.open);}};
 $('#rep-trans').addEventListener('input',e=>{if(e.target.id==='tSearch'){tSearchTerm=e.target.value;filterTrans();}});
 $('#rep-trans').addEventListener('click',e=>{const s=e.target.closest('[data-seek]');if(s)seekAudio(s.dataset.seek);});
 $('#rep-todo').addEventListener('change',e=>{if(e.target.type==='checkbox')updateTodoProg();});
@@ -714,8 +731,7 @@ $('#cpTrans').onclick=()=>copy(transMd());
 $('#cpTodo').onclick=()=>copy(todoMd());
 $('#btnPrint').onclick=()=>window.print();
 
-renderDict();renderRecs();renderSttModel();
-try{localStorage.removeItem('cn_meetings');}catch(e){} /* v6: 기존 저장분도 삭제 */
+renderDict();renderRecs();renderStore();renderSttModel();
 const _sp=new URLSearchParams(location.search);
 const _shared=((_sp.get('text')||'')+' '+(_sp.get('title')||'')).trim();
 $('#raw').value=_shared||'';
