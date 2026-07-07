@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#ffffff">
 <title>클로드노트</title>
-<!-- v9 · 2026-07-08: 파일관리자 — 기기 내 보관(IndexedDB, 새로고침 유지) + 파일별 ✕ 삭제 + ➕ 파일 추가 버튼 정비 -->
+<!-- v10 · 2026-07-08: 편집 모드(다중 선택 삭제·전체선택) — 삭제 시 기기 보관함에서도 완전 삭제 -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -176,7 +176,14 @@
         <input type="file" id="audioFile" multiple style="position:absolute;width:1px;height:1px;opacity:0;left:-9999px;pointer-events:none">
         <button class="btn soft" id="btnFolder">🗂️ 폴더에서 한번에 불러오기</button>
       </div>
-      <button class="btn ghost sm hidden" id="btnSort" style="margin-top:10px">정렬: 최근순 ▾</button>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn ghost sm hidden" id="btnSort">정렬: 최근순 ▾</button>
+        <button class="btn ghost sm hidden" id="btnEdit">✏️ 편집</button>
+      </div>
+      <div class="hidden" id="editBar" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn ghost sm" id="selAll">☑️ 전체선택</button>
+        <button class="btn sm" id="delSel" style="background:#fdeaec;border-color:#f5c2cb;color:#ef5b6b">🗑 선택 삭제</button>
+      </div>
       <div id="recList" class="reclist"></div>
       <div id="audioBox" class="hidden">
         <div id="nowPlaying" class="lead" style="margin:10px 0 0"></div>
@@ -532,27 +539,34 @@ function addFiles(files,persist){if(persist===undefined)persist=true;let added=0
   if(persist)idbPut(f);
   const a=new Audio();a.preload='metadata';a.onloadedmetadata=()=>{r.dur=a.duration;renderRecs();};a.src=r.url;}
   renderRecs();if(added)$('#btnSort').classList.remove('hidden');return added;}
-function removeRec(i){const r=RECS[i];if(!r)return;
+function removeRec(i,silent){const r=RECS[i];if(!r)return;
   idbDel(r.name+'|'+r.size+'|'+r.date);
   try{URL.revokeObjectURL(r.url);}catch(e){}
   RECS.splice(i,1);
   if(curId===i){curId=-1;$('#audioBox').classList.add('hidden');try{$('#player').pause();}catch(e){}}
   else if(curId>i)curId--;
-  renderRecs();toast('파일을 삭제했어요');}
+  if(!silent){renderRecs();toast('파일을 삭제했어요 (보관함에서도 완전 삭제)');}}
 async function restoreFiles(){const rows=await idbLoadAll();if(!rows.length)return;const fs=rows.map(r=>{try{return new File([r.blob],r.name,{type:(r.blob&&r.blob.type)||'audio/mpeg',lastModified:r.date});}catch(e){return null;}}).filter(Boolean);if(fs.length){addFiles(fs,false);}}
+let editMode=false,selRecs=new Set();
 function renderRecs(){const box=$('#recList'),sort=SORTS[sortIdx],idx=RECS.map((r,i)=>i);
   if(sort==='recent')idx.sort((a,b)=>RECS[b].date-RECS[a].date);else if(sort==='old')idx.sort((a,b)=>RECS[a].date-RECS[b].date);else idx.sort((a,b)=>RECS[a].name.localeCompare(RECS[b].name,'ko'));
-  if(!RECS.length){box.innerHTML='';return;}
+  if(!RECS.length){box.innerHTML='';editMode=false;selRecs.clear();$('#btnEdit').classList.add('hidden');$('#editBar').classList.add('hidden');$('#btnSort').classList.add('hidden');return;}
+  $('#btnEdit').classList.remove('hidden');
   const newest=Math.max(...RECS.map(r=>r.date));
   box.innerHTML=idx.map(i=>{const r=RECS[i],isNew=(sort==='recent'&&r.date===newest);
-    return `<div class="rec${i===curId?' playing':''}" data-id="${i}"><div class="ic">🎙️</div>
-      <div class="m"><div class="nm">${esc(r.name)}</div><div class="su">${isNew?'<span class="new">최신 · </span>':''}${fmtDate(r.date)} · ${fmtSize(r.size)}${r.dur?' · '+fmtDur(r.dur):''}</div></div>
-      <div class="acts">
+    const acts=editMode
+      ?`<div class="acts"><input type="checkbox" data-sel="${i}" ${selRecs.has(i)?'checked':''} style="width:24px;height:24px;accent-color:#ef5b6b"></div>`
+      :`<div class="acts">
       <button class="go" data-play="${i}" title="재생">▶</button>
       <button class="go" data-stt="${i}" title="이 파일 받아쓰기" style="background:var(--teal)">📝</button>
       <button class="go" data-dl="${i}" title="MP3로 저장" style="background:#6b21a8">⬇</button>
       <button class="go" data-rm="${i}" title="삭제" style="background:#fdeaec;color:#ef5b6b">✕</button>
-      </div></div>`;}).join('');}
+      </div>`;
+    return `<div class="rec${i===curId?' playing':''}${editMode&&selRecs.has(i)?' playing':''}" data-id="${i}"><div class="ic">🎙️</div>
+      <div class="m"><div class="nm">${esc(r.name)}</div><div class="su">${isNew?'<span class="new">최신 · </span>':''}${fmtDate(r.date)} · ${fmtSize(r.size)}${r.dur?' · '+fmtDur(r.dur):''}</div></div>
+      ${acts}</div>`;}).join('');
+  updateDelSel();}
+function updateDelSel(){const b=$('#delSel');if(b)b.textContent='🗑 선택 삭제'+(selRecs.size?' ('+selRecs.size+')':'');}
 async function exportMp3(i){
   const r=RECS[i];if(!r)return;
   toast('MP3 변환 중… 파일이 길면 시간이 걸려요');
@@ -754,10 +768,16 @@ $('#audioFile').onchange=e=>{const n=addFiles([...e.target.files]);e.target.valu
   else toast(n+'개 불러옴 — 각 파일의 📝 버튼을 누르면 바로 받아쓰기돼요');};
 $('#btnFolder').onclick=openFolder;
 $('#btnSort').onclick=()=>{sortIdx=(sortIdx+1)%SORTS.length;$('#btnSort').textContent='정렬: '+({recent:'최근순',old:'오래된순',name:'이름순'}[SORTS[sortIdx]])+' ▾';renderRecs();};
-$('#recList').onclick=e=>{const rm=e.target.closest('[data-rm]');if(rm){removeRec(+rm.dataset.rm);return;}
+$('#recList').onclick=e=>{
+  if(editMode){const it=e.target.closest('[data-id]');if(it){const i=+it.dataset.id;if(selRecs.has(i))selRecs.delete(i);else selRecs.add(i);renderRecs();}return;}
+  const rm=e.target.closest('[data-rm]');if(rm){removeRec(+rm.dataset.rm);return;}
   const dl=e.target.closest('[data-dl]');if(dl){exportMp3(+dl.dataset.dl);return;}
   const st=e.target.closest('[data-stt]');if(st){selectRec(+st.dataset.stt);transcribeCurrent();return;}
   const p=e.target.closest('[data-play]'),it=e.target.closest('[data-id]');if(p)return playRec(+p.dataset.play);if(it)playRec(+it.dataset.id);};
+$('#btnEdit').onclick=()=>{editMode=!editMode;selRecs.clear();$('#editBar').classList.toggle('hidden',!editMode);$('#btnEdit').textContent=editMode?'✅ 완료':'✏️ 편집';renderRecs();};
+$('#selAll').onclick=()=>{if(selRecs.size===RECS.length)selRecs.clear();else RECS.forEach((_,i)=>selRecs.add(i));renderRecs();};
+$('#delSel').onclick=()=>{if(!selRecs.size){toast('선택된 파일이 없어요');return;}
+  const n=selRecs.size;[...selRecs].sort((a,b)=>b-a).forEach(i=>removeRec(i,true));selRecs.clear();renderRecs();toast(n+'개 파일을 완전 삭제했어요');};
 $('#spkList').addEventListener('input',e=>{const l=e.target.dataset.l,k=e.target.dataset.k;if(l!=null&&k){SPK[l][k]=e.target.value;renderReports();renderDiff();}});
 $('#spkList').addEventListener('click',e=>{if(e.target.classList.contains('pdot')){SPK[e.target.dataset.l].color=e.target.dataset.c;renderSpeakers();renderReports();renderDiff();}});
 $('#rep-trans').addEventListener('change',e=>{if(e.target.dataset.bi!=null){STATE.cleanBlocks[+e.target.dataset.bi].speaker=e.target.value;STATE.blocks[+e.target.dataset.bi].speaker=e.target.value;renderReports();renderSpeakers();}});
