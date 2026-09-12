@@ -283,11 +283,21 @@
     </div>
 
     <div class="card">
-      <h2>🤖 Claude 정밀모드</h2>
-      <div class="sub">규칙 교정의 한계를 넘는 문맥 교정·요약이 필요할 때, 프롬프트를 복사해 Claude에 전사와 함께 주세요.</div>
+      <h2>🤖 AI 정밀모드</h2>
+      <div class="sub">버튼 한 번으로 AI(Gemini, 장애 시 Groq 예비)가 문맥 교정·회의록 작성을 바로 해줍니다. 전사본이 외부 AI 서버로 전송되며 저장되지는 않습니다. 민감한 회의는 아래 '프롬프트 복사'로 직접 하세요.</div>
       <div class="stack">
-        <button class="btn teal" id="cpPrompt">교정 프롬프트 + 전사 복사</button>
+        <button class="btn teal" id="aiClean">✨ AI로 전사 교정 (바로)</button>
+        <button class="btn teal" id="aiMinutes">📝 AI로 회의록 작성 (바로)</button>
+        <button class="btn soft" id="cpPrompt">교정 프롬프트 + 전사 복사</button>
         <button class="btn soft" id="cpPromptMin">회의록 프롬프트 복사</button>
+      </div>
+      <div id="aiOut" style="display:none;margin-top:10px">
+        <div class="sub" id="aiOutHead"></div>
+        <textarea id="aiOutText" style="min-height:220px;width:100%"></textarea>
+        <div class="stack" style="margin-top:8px">
+          <button class="btn soft" id="aiApply">교정본을 전사에 반영</button>
+          <button class="btn soft" id="aiCopy">결과 복사</button>
+        </div>
       </div>
     </div>
   </section>
@@ -785,6 +795,27 @@ $$('#optFiller,#optSpace,#optDict,#optPunc,#optProfan').forEach(c=>c.onchange=()
 $('#shareAll').onclick=async()=>{const t=shareMd();if(navigator.share){try{await navigator.share({title:(STATE.title||'회의록'),text:t});return;}catch(e){if(e.name==='AbortError')return;}}copy(t);};
 $('#dlAll').onclick=()=>download((STATE.title||'회의록')+'.md',reportMd()+'\n\n'+todoMd()+'\n\n'+transMd());
 $('#cpPrompt').onclick=()=>copy(cleanPrompt());
+// ── AI 정밀모드: 김보미.com 의 /api/ai 프록시(Gemini→Groq) 호출. GitHub Pages 에는 서버가 없어 그쪽 서버리스를 빌려 쓴다.
+const AI_API='https://www.xn--4k0b53xuva.com/api/ai';
+async function aiRun(task){
+  const src=task==='clean'?$('#raw').value.trim():(STATE.cleanBlocks.map(b=>dispName(b.speaker)+(b.ts?' ['+b.ts+']':'')+'\n'+b.clean).join('\n\n')||$('#raw').value.trim());
+  if(!src){toast('전사를 먼저 입력하세요');return;}
+  if(src.length>60000){toast('전사가 너무 깁니다(6만 자 초과) — 나눠서 처리하세요');return;}
+  const btn=$(task==='clean'?'#aiClean':'#aiMinutes');const orig=btn.textContent;btn.disabled=true;btn.textContent='AI 처리 중… (최대 1분)';
+  try{
+    const r=await fetch(AI_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task,text:src})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.ok)throw new Error(j.error||('HTTP '+r.status));
+    $('#aiOut').style.display='block';$('#aiOutHead').textContent=(task==='clean'?'✨ 교정본':'📝 회의록')+' — '+j.model;
+    $('#aiOutText').value=j.text;$('#aiApply').style.display=task==='clean'?'':'none';
+    STATE._aiTask=task;toast('완료');$('#aiOut').scrollIntoView({behavior:'smooth'});
+  }catch(e){toast('AI 실패: '+(e.message||e).slice(0,80));}
+  finally{btn.disabled=false;btn.textContent=orig;}
+}
+$('#aiClean').onclick=()=>aiRun('clean');
+$('#aiMinutes').onclick=()=>aiRun('minutes');
+$('#aiCopy').onclick=()=>copy($('#aiOutText').value);
+$('#aiApply').onclick=()=>{const t=$('#aiOutText').value.trim();if(!t)return;$('#raw').value=t;STATE.id=null;process();go('report');toast('교정본을 반영했습니다');};
 $('#cpPromptMin').onclick=()=>copy(minPrompt());
 $('#addDict').onclick=()=>{syncSettings();DICT.push(['','']);renderDict();};
 $('#dictList').onclick=e=>{if(e.target.dataset.del!=null){syncSettings();DICT.splice(+e.target.dataset.del,1);renderDict();}};
