@@ -796,7 +796,7 @@ $('#shareAll').onclick=async()=>{const t=shareMd();if(navigator.share){try{await
 $('#dlAll').onclick=()=>download((STATE.title||'회의록')+'.md',reportMd()+'\n\n'+todoMd()+'\n\n'+transMd());
 $('#cpPrompt').onclick=()=>copy(cleanPrompt());
 // ── AI 정밀모드: 김보미.com 의 /api/ai 프록시(Gemini→Groq) 호출. GitHub Pages 에는 서버가 없어 그쪽 서버리스를 빌려 쓴다.
-const AI_API='https://www.xn--4k0b53xuva.com/api/ai';
+const AI_API='https://art1987.kr/api/ai';   // Gemini+Groq 키가 있는 Vercel 프로젝트(art1987) 의 서버리스. 김보미.com 은 Hobby 함수 12개 상한
 async function aiRun(task){
   const src=task==='clean'?$('#raw').value.trim():(STATE.cleanBlocks.map(b=>dispName(b.speaker)+(b.ts?' ['+b.ts+']':'')+'\n'+b.clean).join('\n\n')||$('#raw').value.trim());
   if(!src){toast('전사를 먼저 입력하세요');return;}
